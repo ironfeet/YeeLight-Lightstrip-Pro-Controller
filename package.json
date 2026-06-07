@@ -1,0 +1,17 @@
+{
+  "name": "light-strip-pro",
+  "version": "1.0.0",
+  "description": "Control your Yeelight strip based on screen color and Antigravity status",
+  "main": "main.js",
+  "scripts": {
+    "start": "xattr -cr node_modules/electron/dist/Electron.app 2>/dev/null; node_modules/electron/dist/Electron.app/Contents/MacOS/Electron .",
+    "dev": "xattr -cr node_modules/electron/dist/Electron.app 2>/dev/null; node_modules/electron/dist/Electron.app/Contents/MacOS/Electron . --dev"
+  },
+  "keywords": [],
+  "author": "Light Strip Pro",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^22.3.27"
+  },
+  "dependencies": {}
+}
