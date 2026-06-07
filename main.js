@@ -13,31 +13,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-const { execSync } = require('child_process');
 
-function isCommandExecuting(cmdStr) {
-  if (!cmdStr) return false;
-  try {
-    const stdout = execSync('ps -axww -o command', { encoding: 'utf8', stdio: 'pipe' });
-    const lines = stdout.split('\n');
-    let sig = cmdStr.substring(0, 40).replace(/["'\\\n\r]/g, '').trim();
-    if (!sig) return false;
-    const escapedSig = sig.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-
-    for (let line of lines) {
-      if (line.includes('ps -axww')) continue;
-      
-      const cleanLine = line.replace(/["'\\\n\r]/g, '');
-      const regex = new RegExp(`\\b${escapedSig}`);
-      if (regex.test(cleanLine)) {
-        return true;
-      }
-    }
-    return false;
-  } catch(e) {
-    return false;
-  }
-}
 
 const { spawnSync } = require('child_process');
 
@@ -263,17 +239,7 @@ function classifyStatus(brainDir) {
     if (['ASK_QUESTION', 'ASK_PERMISSION'].includes(type)) {
       return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your input' };
     }
-    if (type === 'RUN_COMMAND' || type === 'DEFAULT_API:RUN_COMMAND') {
-      let cmd = '';
-      if (toolCalls.length > 0 && toolCalls[0].args && toolCalls[0].args.CommandLine) {
-        cmd = toolCalls[0].args.CommandLine;
-      }
-      
-      if (isCommandExecuting(cmd)) {
-        return { state: 'running', label: 'Running', description: 'Executing terminal command' };
-      }
-      return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
-    }
+
     return getActiveState(type, toolCalls);
   }
 
@@ -296,19 +262,6 @@ function classifyStatus(brainDir) {
       
     if (['ASK_QUESTION', 'ASK_PERMISSION'].includes(actionName)) {
       return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your input' };
-    }
-    if (actionName === 'RUN_COMMAND' || type === 'DEFAULT_API:RUN_COMMAND') {
-      let cmd = '';
-      if (toolCalls.length > 0 && toolCalls[0].args && toolCalls[0].args.CommandLine) {
-        cmd = toolCalls[0].args.CommandLine;
-      }
-      
-      // If the command is actively executing in the OS, show running.
-      // If it's NOT executing yet, it's blocked by the IDE permission dialog, so show waiting.
-      if (isCommandExecuting(cmd)) {
-        return { state: 'running', label: 'Running', description: 'Executing terminal command' };
-      }
-      return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
     }
       // Any other tool sitting in PLANNER_RESPONSE (DONE) is waiting for user permission to execute
       return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
