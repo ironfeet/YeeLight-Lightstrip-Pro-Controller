@@ -310,8 +310,8 @@ function classifyStatus(brainDir) {
       }
       return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
     }
-      
-      return getActiveState(type, toolCalls);
+      // Any other tool sitting in PLANNER_RESPONSE (DONE) is waiting for user permission to execute
+      return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
     }
 
     // 4. A tool just finished executing. The LLM is thinking about the result.
