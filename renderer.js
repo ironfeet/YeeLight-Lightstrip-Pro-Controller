@@ -229,7 +229,6 @@ async function captureAndSend() {
       document.getElementById('screen-color-preview').style.background = rgbToCss(r, g, b);
       document.getElementById('screen-hex').textContent = hex;
       document.getElementById('screen-rgb').textContent = `rgb(${r}, ${g}, ${b})`;
-      document.getElementById('screen-video').src = frame.dataURL;
 
       // Calculate and display physical brightness directly in UI
       const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
