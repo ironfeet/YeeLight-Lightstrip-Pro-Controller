@@ -233,9 +233,7 @@ function classifyStatus(brainDir) {
   // ── Deterministic State Machine ───────────────────────────────────────────
   // If the agent is currently streaming text or executing a tool:
   if (status === 'RUNNING' || status === 'IN_PROGRESS') {
-    // These tools physically pause the orchestrator to wait for user interaction.
-    // Even if they are marked as 'RUNNING', the system is actually blocked on the user.
-    if (['RUN_COMMAND', 'ASK_QUESTION', 'ASK_PERMISSION'].includes(type)) {
+    if (['RUN_COMMAND', 'ASK_QUESTION', 'ASK_PERMISSION'].includes(type) || type === 'DEFAULT_API:RUN_COMMAND') {
       return { state: 'waiting', label: 'Waiting for You', description: `Action pending your input` };
     }
     return getActiveState(type, toolCalls);
@@ -261,19 +259,24 @@ function classifyStatus(brainDir) {
       if (['RUN_COMMAND', 'ASK_QUESTION', 'ASK_PERMISSION'].includes(actionName)) {
         return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
       }
+      
       return getActiveState(type, toolCalls);
     }
 
     // 4. A tool just finished executing. The LLM is thinking about the result.
-    // We maintain the tool's color state while the LLM thinks
     if (isToolType(type) || type === 'CODE_ACTION') {
-      return getActiveState(type, []);
+      return { state: 'thinking', label: 'Thinking', description: 'Thinking about the result' };
     }
 
     // 5. If the agent just finished outputting text WITH NO TOOLS, its turn is officially over.
     if (type === 'PLANNER_RESPONSE' || type === 'GENERIC') {
       if (activeTasks.length > 0) {
-        const d = activeTasks.length === 1 ? activeTasks[0] : `${activeTasks.length} tasks: ${activeTasks[0]}`;
+        const desc = activeTasks[0];
+        // If a background task is a potentially interactive command (node, sed), it might be waiting for user input
+        if (desc.startsWith('node ') || desc.startsWith('sed ') || desc.includes('| node ') || desc.includes('| sed ')) {
+          return { state: 'waiting', label: 'Waiting for You', description: 'Interactive task waiting for input' };
+        }
+        const d = activeTasks.length === 1 ? desc : `${activeTasks.length} tasks: ${desc}`;
         return { state: 'running', label: 'Running', description: d };
       }
       return { state: 'idle', label: 'Idle', description: 'Waiting for your message' };
