@@ -270,11 +270,6 @@ function classifyStatus(brainDir) {
       }
       
       if (isCommandExecuting(cmd)) {
-        const interactiveCmds = ['sed', 'node', 'python', 'python3', 'ruby', 'perl', 'awk', 'cat', 'read', 'bash', 'zsh', 'sh', 'irb', 'mysql', 'sqlite3', 'psql', 'ssh', 'ftp', 'nano', 'vim', 'vi', 'less', 'more', 'top', 'htop'];
-        const parts = cmd.split('|').map(p => p.trim().split(/\s+/)[0]);
-        if (parts.some(p => interactiveCmds.includes(p))) {
-          return { state: 'waiting', label: 'Waiting for You', description: 'Interactive command pending input' };
-        }
         return { state: 'running', label: 'Running', description: 'Executing terminal command' };
       }
       return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
@@ -311,11 +306,6 @@ function classifyStatus(brainDir) {
       // If the command is actively executing in the OS, show running.
       // If it's NOT executing yet, it's blocked by the IDE permission dialog, so show waiting.
       if (isCommandExecuting(cmd)) {
-        const interactiveCmds = ['sed', 'node', 'python', 'python3', 'ruby', 'perl', 'awk', 'cat', 'read', 'bash', 'zsh', 'sh', 'irb', 'mysql', 'sqlite3', 'psql', 'ssh', 'ftp', 'nano', 'vim', 'vi', 'less', 'more', 'top', 'htop'];
-        const parts = cmd.split('|').map(p => p.trim().split(/\s+/)[0]);
-        if (parts.some(p => interactiveCmds.includes(p))) {
-          return { state: 'waiting', label: 'Waiting for You', description: 'Interactive command pending input' };
-        }
         return { state: 'running', label: 'Running', description: 'Executing terminal command' };
       }
       return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
@@ -333,16 +323,6 @@ function classifyStatus(brainDir) {
     if (type === 'PLANNER_RESPONSE' || type === 'GENERIC') {
       if (activeTasks.length > 0) {
         const desc = activeTasks[0];
-        const interactiveCmds = ['sed', 'node', 'python', 'python3', 'ruby', 'perl', 'awk', 'cat', 'read', 'bash', 'zsh', 'sh', 'irb', 'mysql', 'sqlite3', 'psql', 'ssh', 'ftp', 'nano', 'vim', 'vi', 'less', 'more', 'top', 'htop'];
-        
-        // Check if any part of the pipe chain is an interactive command
-        const parts = desc.split('|').map(p => p.trim().split(/\s+/)[0]);
-        const isInteractive = parts.some(p => interactiveCmds.includes(p));
-        
-        // If a background task is a potentially interactive command, it might be waiting for user input
-        if (isInteractive) {
-          return { state: 'waiting', label: 'Waiting for You', description: 'Interactive task waiting for input' };
-        }
         const d = activeTasks.length === 1 ? desc : `${activeTasks.length} tasks: ${desc}`;
         return { state: 'running', label: 'Running', description: d };
       }
