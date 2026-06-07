@@ -10,6 +10,8 @@
 
 const { app, BrowserWindow, ipcMain, desktopCapturer, screen } = require('electron');
 const path = require('path');
+let globalLastActiveState = null;
+let globalLastActiveTime = 0;
 const fs = require('fs');
 const os = require('os');
 
@@ -244,26 +246,28 @@ function classifyStatus(brainDir) {
   return { ...status, logs };
 }
 
+
 function _classifyStatus(brainDir, transcript, lines) {
-  // --- VISUAL HOLD: Keep active states visible for at least 2 seconds ---
-  const now = Date.now();
-  for (let i = lines.length - 1; i >= Math.max(0, lines.length - 20); i--) {
-    const line = lines[i];
-    if (line && line.created_at) {
-      const age = now - new Date(line.created_at).getTime();
-      if (age < (currentConfig.visualHold || 1000)) {
-        if (line.tool_calls && line.tool_calls.length > 0) {
-          let actionName = (line.tool_calls[0]?.name || line.tool_calls[0]?.function?.name || '').toUpperCase();
-          actionName = actionName.replace(/^DEFAULT_API:/, '');
-          if (!['ASK_QUESTION', 'ASK_PERMISSION'].includes(actionName)) {
-            return getActiveState(actionName, line.tool_calls);
-          }
-        }
-      }
+  const actualState = _classifyStatusRaw(brainDir, transcript, lines);
+  const isWait = ['waiting'].includes(actualState.state);
+  const isActive = ['coding', 'running', 'researching', 'delegating'].includes(actualState.state);
+  
+  if (isActive) {
+    globalLastActiveState = actualState;
+    globalLastActiveTime = Date.now();
+  }
+  
+  if (!isActive && !isWait && globalLastActiveState) {
+    const age = Date.now() - globalLastActiveTime;
+    if (age < (currentConfig.visualHold || 1000)) {
+      return globalLastActiveState;
     }
   }
+  
+  return actualState;
+}
 
-
+function _classifyStatusRaw(brainDir, transcript, lines) {
   // ── Track Background Tasks ────────────────────────────────────────────────
   const startedTasks = new Map();
   const finishedTasks = new Set();
