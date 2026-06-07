@@ -145,7 +145,7 @@ async function sendColor(r, g, b, scaleLuminance = false) {
 }
 
 // ── Mode 1: Screen Ambient ────────────────────────────────────────────────────
-const canvas  = document.getElementById('offscreen-canvas');
+const canvas  = document.createElement('canvas');
 const ctx     = canvas.getContext('2d', { willReadFrequently: true });
 let mode1Timer = null;
 
