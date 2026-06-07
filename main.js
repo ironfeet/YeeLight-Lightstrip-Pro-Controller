@@ -350,7 +350,7 @@ function _classifyStatusRaw(brainDir, transcript, lines) {
       if (activeTasks.length > 0) {
         const desc = activeTasks[0];
         const d = activeTasks.length === 1 ? desc : `${activeTasks.length} tasks: ${desc}`;
-        return { state: 'running', label: 'Running', description: d };
+        return { state: 'idle', label: 'Idle', description: `Background: ${d}` };
       }
       return { state: 'idle', label: 'Idle', description: 'Waiting for your message' };
     }
