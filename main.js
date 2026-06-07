@@ -249,19 +249,22 @@ function classifyStatus(brainDir) {
 
 function _classifyStatus(brainDir, transcript, lines) {
   const actualState = _classifyStatusRaw(brainDir, transcript, lines);
-  const isWait = ['waiting'].includes(actualState.state);
+  
+  if (actualState.state === 'idle' || actualState.state === 'waiting' || actualState.state === 'off' || actualState.state === 'inactive') {
+    globalLastActiveState = null;
+    return actualState;
+  }
+  
   const isActive = ['coding', 'running', 'researching', 'delegating'].includes(actualState.state);
   
   if (isActive) {
     globalLastActiveState = actualState;
-    globalLastActiveTime = Date.now();
+    return actualState;
   }
   
-  if (!isActive && !isWait && globalLastActiveState) {
-    const age = Date.now() - globalLastActiveTime;
-    if (age < (currentConfig.visualHold || 1000)) {
-      return globalLastActiveState;
-    }
+  // If actualState is 'thinking', hold the last active state indefinitely!
+  if (actualState.state === 'thinking' && globalLastActiveState) {
+    return globalLastActiveState;
   }
   
   return actualState;
@@ -350,7 +353,7 @@ function _classifyStatusRaw(brainDir, transcript, lines) {
       if (activeTasks.length > 0) {
         const desc = activeTasks[0];
         const d = activeTasks.length === 1 ? desc : `${activeTasks.length} tasks: ${desc}`;
-        return { state: 'idle', label: 'Idle', description: `Background: ${d}` };
+        return { state: 'running', label: 'Running', description: d };
       }
       return { state: 'idle', label: 'Idle', description: 'Waiting for your message' };
     }
