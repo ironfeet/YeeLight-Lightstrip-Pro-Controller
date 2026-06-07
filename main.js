@@ -180,6 +180,9 @@ function classifyStatus(brainDir) {
   }
 
   const ageMs = Date.now() - transcript.mtime;
+  if (ageMs > 15 * 60 * 1000) {
+    return { state: 'off', label: 'Off', description: 'Sleeping due to inactivity' };
+  }
   if (ageMs > 5 * 60 * 1000) {
     return { state: 'inactive', label: 'Inactive', description: 'No activity in 5+ minutes' };
   }
@@ -230,6 +233,11 @@ function classifyStatus(brainDir) {
   // ── Deterministic State Machine ───────────────────────────────────────────
   // If the agent is currently streaming text or executing a tool:
   if (status === 'RUNNING' || status === 'IN_PROGRESS') {
+    // These tools physically pause the orchestrator to wait for user interaction.
+    // Even if they are marked as 'RUNNING', the system is actually blocked on the user.
+    if (['RUN_COMMAND', 'ASK_QUESTION', 'ASK_PERMISSION'].includes(type)) {
+      return { state: 'waiting', label: 'Waiting for You', description: `Action pending your input` };
+    }
     return getActiveState(type, toolCalls);
   }
 
@@ -245,13 +253,24 @@ function classifyStatus(brainDir) {
       return { state: 'thinking', label: 'Thinking', description: 'Reading system update' };
     }
 
-    // 3. If the agent just finished a tool call, the result is sent to the LLM
-    // We maintain the tool's color state while the LLM thinks about the result
-    if (toolCalls.length > 0 || isToolType(type) || type === 'CODE_ACTION') {
+    // 3. The agent just requested a tool. It is either executing or blocked waiting for your permission.
+    if (toolCalls.length > 0) {
+      let actionName = (toolCalls[0]?.name || toolCalls[0]?.function?.name || '').toUpperCase();
+      actionName = actionName.replace(/^DEFAULT_API:/, '');
+      
+      if (['RUN_COMMAND', 'ASK_QUESTION', 'ASK_PERMISSION'].includes(actionName)) {
+        return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
+      }
       return getActiveState(type, toolCalls);
     }
 
-    // 4. If the agent just finished outputting text WITH NO TOOLS, its turn is officially over.
+    // 4. A tool just finished executing. The LLM is thinking about the result.
+    // We maintain the tool's color state while the LLM thinks
+    if (isToolType(type) || type === 'CODE_ACTION') {
+      return getActiveState(type, []);
+    }
+
+    // 5. If the agent just finished outputting text WITH NO TOOLS, its turn is officially over.
     if (type === 'PLANNER_RESPONSE' || type === 'GENERIC') {
       if (activeTasks.length > 0) {
         const d = activeTasks.length === 1 ? activeTasks[0] : `${activeTasks.length} tasks: ${activeTasks[0]}`;
@@ -288,6 +307,7 @@ function getActiveState(type, toolCalls) {
   let actionName = type.toUpperCase();
   if (toolCalls && toolCalls.length > 0) {
     actionName = (toolCalls[0]?.name || toolCalls[0]?.function?.name || '').toUpperCase();
+    actionName = actionName.replace(/^DEFAULT_API:/, '');
   }
 
   if (CODING.includes(actionName))   return { state: 'coding',      label: 'Coding',      description: 'Editing files' };

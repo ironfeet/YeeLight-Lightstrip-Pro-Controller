@@ -21,6 +21,7 @@ const STATE_COLORS = {
   idle:        [148, 163, 184],   // #94A3B8
   inactive:    [120, 53,  15],    // #78350F
   offline:     [30,  41,  59],    // #1E293B
+  off:         [0,   0,   0],     // #000000
 };
 
 function stateToRgb(state) {
@@ -95,33 +96,52 @@ function updateStatusPanel(prefix, status) {
   const css = rgbToCss(r, g, b);
 
   if (badge) {
+    badge.style.background = css;
     badge.className = `status-badge badge-${status.state}`;
   }
   if (block) {
     block.style.background = css;
   }
+
+  if (status.state === 'waiting') {
+    badge.classList.add('blinking');
+    block.classList.add('blinking');
+  } else {
+    badge.classList.remove('blinking');
+    block.classList.remove('blinking');
+  }
 }
 
 // ── Send colour to light ──────────────────────────────────────────────────────
-async function sendColor(r, g, b) {
+let lastSentHash = '';
+async function sendColor(r, g, b, scaleLuminance = false) {
   // Always update the UI preview strip immediately
   setAccentColor(r, g, b);
 
-  if (!lightOn || !config.haToken) return;
-
-  // Throttle: only send to HA if changed beyond threshold
-  if (lastSentRgb) {
-    const delta = Math.abs(r - lastSentRgb[0]) + Math.abs(g - lastSentRgb[1]) + Math.abs(b - lastSentRgb[2]);
-    if (delta < config.colorThreshold) return;
+  let targetBrightness = config.brightness;
+  if (scaleLuminance) {
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    const scale = Math.max(0.05, luminance);
+    targetBrightness = Math.round(config.brightness * scale);
   }
 
-  lastSentRgb = [r, g, b];
+  if (!lightOn || !config.haToken) return targetBrightness;
+
+  const hash = `${r},${g},${b}-${targetBrightness}`;
+  if (hash === lastSentHash) return targetBrightness; // Debounce identical commands
 
   try {
-    await getHA().setColor(r, g, b, config.brightness);
+    if (r === 0 && g === 0 && b === 0) {
+      await getHA().turnOff();
+    } else {
+      await getHA().setColor(r, g, b, targetBrightness);
+    }
+    lastSentHash = hash;
   } catch (e) {
-    console.error('[HA] setColor failed (non-sensitive):', e.message);
+    console.error('[HA] request failed (non-sensitive):', e.message);
   }
+
+  return targetBrightness;
 }
 
 // ── Mode 1: Screen Ambient ────────────────────────────────────────────────────
@@ -168,7 +188,7 @@ async function captureAndSend() {
     if (!frame) return;
 
     const img = new Image();
-    img.onload = () => {
+    img.onload = async () => {
       canvas.width  = img.width;
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
@@ -211,7 +231,15 @@ async function captureAndSend() {
       document.getElementById('screen-rgb').textContent = `rgb(${r}, ${g}, ${b})`;
       document.getElementById('screen-video').src = frame.dataURL;
 
-      sendColor(r, g, b);
+      // Calculate and display physical brightness directly in UI
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      const scale = Math.max(0.05, luminance);
+      const targetBrightness = Math.round(config.brightness * scale);
+
+      const bEl = document.getElementById('screen-brightness');
+      if (bEl) bEl.textContent = `Brightness: ${targetBrightness}%`;
+
+      sendColor(r, g, b, true);
     };
     img.src = frame.dataURL;
   } catch (e) {
@@ -285,7 +313,7 @@ function stopMode3() {
 // ── Mode Switching ────────────────────────────────────────────────────────────
 function activateMode(mode) {
   currentMode = mode;
-  lastSentRgb = null; // force resend on mode switch
+  lastSentHash = ''; // force resend on mode switch
 
   // Tabs
   document.querySelectorAll('.tab').forEach(t => {
@@ -301,12 +329,15 @@ function activateMode(mode) {
   const panel = document.getElementById(`panel-${mode}`);
   if (panel) panel.classList.add('active');
 
-  // Start/stop loops
+  // Start/stop loops and force immediate UI/Light update
   if (mode === 'screen') {
     startMode1();
   } else {
     stopMode1();
   }
+
+  if (mode === 'agent') pollAgentStatus();
+  if (mode === 'ide') pollIDEStatus();
 }
 
 // ── Power Toggle ──────────────────────────────────────────────────────────────

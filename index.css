@@ -25,6 +25,7 @@
   --c-idle:        #94A3B8;
   --c-inactive:    #78350F;
   --c-offline:     #1E293B;
+  --c-off:         #000000;
 }
 
 html, body {
@@ -219,6 +220,7 @@ html, body {
 .badge-idle       { background: var(--c-idle);        animation: none; opacity: 0.6; }
 .badge-inactive   { background: var(--c-inactive);    animation: none; opacity: 0.5; }
 .badge-offline    { background: var(--c-offline);     animation: none; opacity: 0.4; }
+.badge-off        { background: var(--c-off);         animation: none; opacity: 0.3; }
 .badge-active     { background: var(--c-coding);      animation: pulse-steady 2s infinite; }
 
 @keyframes pulse-steady {
