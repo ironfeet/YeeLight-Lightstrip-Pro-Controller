@@ -35,18 +35,24 @@ const DEFAULT_CONFIG = {
   brightness: 80,
   saturationBoost: 1.2,
   colorThreshold: 15,
+  visualHold: 1000,
 };
+
+let currentConfig = { ...DEFAULT_CONFIG };
 
 function loadConfig() {
   try {
     if (fs.existsSync(CONFIG_PATH)) {
       const raw = fs.readFileSync(CONFIG_PATH, 'utf-8');
-      return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+      const loaded = { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+      currentConfig = loaded;
+      return loaded;
     }
   } catch (e) {
     console.error('[Config] Load error (non-sensitive):', e.message);
   }
-  return { ...DEFAULT_CONFIG };
+  currentConfig = { ...DEFAULT_CONFIG };
+  return currentConfig;
 }
 
 function saveConfig(config) {
@@ -245,7 +251,7 @@ function _classifyStatus(brainDir, transcript, lines) {
     const line = lines[i];
     if (line && line.created_at) {
       const age = now - new Date(line.created_at).getTime();
-      if (age < 2000) {
+      if (age < (currentConfig.visualHold || 1000)) {
         if (line.tool_calls && line.tool_calls.length > 0) {
           let actionName = (line.tool_calls[0]?.name || line.tool_calls[0]?.function?.name || '').toUpperCase();
           actionName = actionName.replace(/^DEFAULT_API:/, '');

@@ -379,6 +379,8 @@ function populateSettings() {
   const brightEl = document.getElementById('brightness-pct');
   brightEl.value = config.brightness || 80;
   document.getElementById('brightness-val').textContent = `${brightEl.value}%`;
+  const vhEl = document.getElementById('visual-hold');
+  if(vhEl) { vhEl.value = config.visualHold || 1000; document.getElementById('visual-hold-val').textContent = `${vhEl.value}ms`; }
   showTokenStatus();
 }
 
@@ -403,6 +405,9 @@ function setSettingsStatus(msg, type = '') {
 }
 
 // ── Event Listeners ───────────────────────────────────────────────────────────
+  document.getElementById('visual-hold')?.addEventListener('input', e => {
+    document.getElementById('visual-hold-val').textContent = `${e.target.value}ms`;
+  });
 function bindEvents() {
   // Mode tabs
   document.querySelectorAll('.tab[data-mode]').forEach(tab => {
@@ -483,6 +488,8 @@ function bindEvents() {
     config.haToken   = document.getElementById('ha-token').value.trim();
     config.entityId  = document.getElementById('ha-entity').value.trim();
     config.brightness = parseInt(document.getElementById('brightness-pct').value);
+    const vhEl = document.getElementById('visual-hold');
+    if(vhEl) { config.visualHold = parseInt(vhEl.value); }
 
     await persistConfig();
     showTokenStatus();
