@@ -12,6 +12,33 @@ const { app, BrowserWindow, ipcMain, desktopCapturer, screen } = require('electr
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+
+const { execSync } = require('child_process');
+
+function isCommandExecuting(cmdStr) {
+  if (!cmdStr) return false;
+  try {
+    const stdout = execSync('ps -axww -o command', { encoding: 'utf8', stdio: 'pipe' });
+    const lines = stdout.split('\n');
+    let sig = cmdStr.substring(0, 40).replace(/["'\\\n\r]/g, '').trim();
+    if (!sig) return false;
+    const escapedSig = sig.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+
+    for (let line of lines) {
+      if (line.includes('ps -axww')) continue;
+      
+      const cleanLine = line.replace(/["'\\\n\r]/g, '');
+      const regex = new RegExp(`\\b${escapedSig}`);
+      if (regex.test(cleanLine)) {
+        return true;
+      }
+    }
+    return false;
+  } catch(e) {
+    return false;
+  }
+}
+
 const { spawnSync } = require('child_process');
 
 // Disable GPU hardware acceleration to avoid sandbox crash on macOS
@@ -233,8 +260,22 @@ function classifyStatus(brainDir) {
   // ── Deterministic State Machine ───────────────────────────────────────────
   // If the agent is currently streaming text or executing a tool:
   if (status === 'RUNNING' || status === 'IN_PROGRESS') {
-    if (['RUN_COMMAND', 'ASK_QUESTION', 'ASK_PERMISSION'].includes(type) || type === 'DEFAULT_API:RUN_COMMAND') {
-      return { state: 'waiting', label: 'Waiting for You', description: `Action pending your input` };
+    if (['ASK_QUESTION', 'ASK_PERMISSION'].includes(type)) {
+      return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your input' };
+    }
+    if (type === 'RUN_COMMAND' || type === 'DEFAULT_API:RUN_COMMAND') {
+      let cmd = '';
+      if (toolCalls.length > 0 && toolCalls[0].args && toolCalls[0].args.CommandLine) {
+        cmd = toolCalls[0].args.CommandLine;
+      }
+      
+      if (isCommandExecuting(cmd)) {
+        if (cmd.includes('sed ') || cmd.includes('node ')) {
+          return { state: 'waiting', label: 'Waiting for You', description: 'Interactive command pending input' };
+        }
+        return { state: 'running', label: 'Running', description: 'Executing terminal command' };
+      }
+      return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
     }
     return getActiveState(type, toolCalls);
   }
@@ -256,9 +297,26 @@ function classifyStatus(brainDir) {
       let actionName = (toolCalls[0]?.name || toolCalls[0]?.function?.name || '').toUpperCase();
       actionName = actionName.replace(/^DEFAULT_API:/, '');
       
-      if (['RUN_COMMAND', 'ASK_QUESTION', 'ASK_PERMISSION'].includes(actionName)) {
-        return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
+    if (['ASK_QUESTION', 'ASK_PERMISSION'].includes(actionName)) {
+      return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your input' };
+    }
+    if (actionName === 'RUN_COMMAND' || type === 'DEFAULT_API:RUN_COMMAND') {
+      let cmd = '';
+      if (toolCalls.length > 0 && toolCalls[0].args && toolCalls[0].args.CommandLine) {
+        cmd = toolCalls[0].args.CommandLine;
       }
+      
+      // If the command is actively executing in the OS, show running.
+      // If it's NOT executing yet, it's blocked by the IDE permission dialog, so show waiting.
+      if (isCommandExecuting(cmd)) {
+        // As a special case, if it's node/sed running in the foreground, they hang for stdin
+        if (cmd.includes('sed ') || cmd.includes('node ')) {
+          return { state: 'waiting', label: 'Waiting for You', description: 'Interactive command pending input' };
+        }
+        return { state: 'running', label: 'Running', description: 'Executing terminal command' };
+      }
+      return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
+    }
       
       return getActiveState(type, toolCalls);
     }
