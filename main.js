@@ -176,24 +176,65 @@ function tailLines(filePath, n = 150) {
   } catch { return []; }
 }
 
+function extractRecentLogs(lines) {
+  const logs = [];
+  for (const line of lines) {
+    let ts = '';
+    if (line.created_at) {
+      const d = new Date(line.created_at);
+      ts = '[' + d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0') + ':' + d.getSeconds().toString().padStart(2, '0') + ']';
+    }
+
+    if (line.type === 'USER_INPUT') {
+      logs.push(ts + ' 👤 ' + line.content.substring(0, 60).replace(/\n/g, ' '));
+    } else if (line.tool_calls && line.tool_calls.length > 0) {
+      for (const call of line.tool_calls) {
+        let toolName = call.name || call.function?.name || 'tool';
+        let summary = '';
+        if (call.args) {
+          try {
+            summary = call.args.toolAction;
+            if (summary && summary.startsWith('"') && summary.endsWith('"')) {
+              summary = JSON.parse(summary);
+            }
+          } catch {}
+        }
+        logs.push(ts + ' 🛠️ ' + (summary || toolName));
+      }
+    } else if (line.type === 'MODEL_RESPONSE' && line.content) {
+      let msg = line.content.replace(/\n/g, ' ').substring(0, 60);
+      logs.push(ts + ' 🤖 ' + msg);
+    }
+  }
+  return logs.slice(-20); // Return last 20 log events
+}
+
 function classifyStatus(brainDir) {
   const transcript = findMostRecentTranscript(brainDir);
   if (!transcript) {
-    return { state: 'offline', label: 'Offline', description: 'No conversations found' };
+    return { state: 'offline', label: 'Offline', description: 'No conversations found', logs: [] };
   }
 
   const ageMs = Date.now() - transcript.mtime;
   if (ageMs > 15 * 60 * 1000) {
-    return { state: 'off', label: 'Off', description: 'Sleeping due to inactivity' };
+    return { state: 'off', label: 'Off', description: 'Sleeping due to inactivity', logs: [] };
   }
   if (ageMs > 5 * 60 * 1000) {
-    return { state: 'inactive', label: 'Inactive', description: 'No activity in 5+ minutes' };
+    return { state: 'inactive', label: 'Inactive', description: 'No activity in 5+ minutes', logs: [] };
   }
 
   const lines = tailLines(transcript.path, 150);
+  const logs = extractRecentLogs(lines);
+
   if (lines.length === 0) {
-    return { state: 'idle', label: 'Idle', description: 'Waiting for your message' };
+    return { state: 'idle', label: 'Idle', description: 'Waiting for your message', logs };
   }
+  
+  const status = _classifyStatus(brainDir, transcript, lines);
+  return { ...status, logs };
+}
+
+function _classifyStatus(brainDir, transcript, lines) {
 
   // ── Track Background Tasks ────────────────────────────────────────────────
   const startedTasks = new Map();

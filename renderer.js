@@ -88,9 +88,26 @@ function updateStatusPanel(prefix, status) {
   const label = document.getElementById(`${prefix}-state-label`);
   const desc  = document.getElementById(`${prefix}-state-desc`);
   const block = document.getElementById(`${prefix}-color-block`);
+  const logsDiv = document.getElementById(`${prefix}-logs`);
 
   if (label) label.textContent = status.label;
   if (desc)  desc.textContent  = status.description;
+
+  if (logsDiv && status.logs) {
+    // Only update if logs changed to avoid scrolling reset
+    const newHtml = status.logs.map(l => {
+      const parts = l.split('] ');
+      if (parts.length > 1) {
+        return `<div class="log-line"><span class="timestamp">${parts[0]}]</span> ${parts.slice(1).join('] ')}</div>`;
+      }
+      return `<div class="log-line">${l}</div>`;
+    }).join('');
+    
+    if (logsDiv.innerHTML !== newHtml) {
+      logsDiv.innerHTML = newHtml;
+      logsDiv.scrollTop = logsDiv.scrollHeight;
+    }
+  }
 
   const [r, g, b] = stateToRgb(status.state);
   const css = rgbToCss(r, g, b);
