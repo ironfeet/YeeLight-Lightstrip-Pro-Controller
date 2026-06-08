@@ -594,3 +594,13 @@ input[type="range"]::-webkit-slider-thumb {
   color: rgba(255, 255, 255, 0.4);
   margin-right: 4px;
 }
+
+.dot-coding { background-color: #10B981; }
+.dot-running { background-color: #06B6D4; }
+.dot-waiting { background-color: #F59E0B; }
+.dot-researching { background-color: #3B82F6; }
+.dot-delegating { background-color: #6366F1; }
+.dot-thinking { background-color: #8B5CF6; }
+.dot-idle { background-color: #E2E8F0; }
+.dot-offline { background-color: #475569; }
+.dot-ide-closed { background-color: #1E293B; }
