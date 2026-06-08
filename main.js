@@ -10,8 +10,7 @@
 
 const { app, BrowserWindow, ipcMain, desktopCapturer, screen } = require('electron');
 const path = require('path');
-let globalLastActiveState = null;
-let globalLastActiveTime = 0;
+
 const fs = require('fs');
 const os = require('os');
 
@@ -37,7 +36,7 @@ const DEFAULT_CONFIG = {
   brightness: 80,
   saturationBoost: 1.2,
   colorThreshold: 15,
-  visualHold: 1000,
+
 };
 
 let currentConfig = { ...DEFAULT_CONFIG };
@@ -241,166 +240,126 @@ function classifyStatus(brainDir) {
   if (lines.length === 0) {
     return { state: 'idle', label: 'Idle', description: 'Waiting for your message', logs };
   }
-  
-  const status = _classifyStatus(brainDir, transcript, lines);
+
+  const status = classifyStatusFromLines(lines);
   return { ...status, logs };
 }
 
 
-function _classifyStatus(brainDir, transcript, lines) {
-  const actualState = _classifyStatusRaw(brainDir, transcript, lines);
-  
-  if (actualState.state === 'idle' || actualState.state === 'waiting' || actualState.state === 'off' || actualState.state === 'inactive') {
-    globalLastActiveState = null;
-    return actualState;
+// ── Tool classification maps ───────────────────────────────────────────────
+const TOOL_STATES = {
+  coding:      ['WRITE_TO_FILE', 'REPLACE_FILE_CONTENT', 'MULTI_REPLACE_FILE_CONTENT', 'CODE_ACTION'],
+  running:     ['RUN_COMMAND', 'MANAGE_TASK', 'MANAGE_SUBAGENTS'],
+  researching: ['VIEW_FILE', 'GREP_SEARCH', 'SEARCH_WEB', 'READ_URL_CONTENT', 'LIST_DIR', 'READ_URL', 'LIST_PERMISSIONS'],
+  delegating:  ['INVOKE_SUBAGENT', 'SEND_MESSAGE', 'DEFINE_SUBAGENT'],
+  generating:  ['GENERATE_IMAGE'],
+  waiting:     ['ASK_QUESTION', 'ASK_PERMISSION'],
+};
+
+const TOOL_LABELS = {
+  coding:      { label: 'Coding',      description: 'Editing files' },
+  running:     { label: 'Running',     description: 'Executing command' },
+  researching: { label: 'Researching', description: 'Gathering context' },
+  delegating:  { label: 'Delegating',  description: 'Managing subagents' },
+  generating:  { label: 'Generating',  description: 'Creating image' },
+  waiting:     { label: 'Waiting for You', description: 'Action pending your input' },
+};
+
+function toolNameToState(name) {
+  const n = (name || '').toUpperCase().replace(/^DEFAULT_API:/, '');
+  for (const [state, tools] of Object.entries(TOOL_STATES)) {
+    if (tools.includes(n)) return state;
   }
-  
-  const isActive = ['coding', 'running', 'researching', 'delegating'].includes(actualState.state);
-  
-  if (isActive) {
-    globalLastActiveState = actualState;
-    return actualState;
-  }
-  
-  // If actualState is 'thinking', hold the last active state indefinitely!
-  if (actualState.state === 'thinking' && globalLastActiveState) {
-    return globalLastActiveState;
-  }
-  
-  return actualState;
+  return null;
 }
 
-function _classifyStatusRaw(brainDir, transcript, lines) {
-  // ── Track Background Tasks ────────────────────────────────────────────────
-  const startedTasks = new Map();
-  const finishedTasks = new Set();
-  for (const line of lines) {
-    if (line.content && typeof line.content === 'string') {
-      const startMatch = line.content.match(/Tool is running as a background task with task id: ([^\s\n]+)/);
-      if (startMatch) {
-        const taskId = startMatch[1];
-        let desc = 'Background task';
-        const descMatch = line.content.match(/Task Description:\s*(.+)/);
-        if (descMatch && descMatch[1]) {
-           desc = descMatch[1].trim();
-           if (desc.length > 35) desc = desc.substring(0, 32) + '...';
-        }
-        startedTasks.set(taskId, desc);
+// ── Core classifier ────────────────────────────────────────────────────────
+// Key insight: every transcript entry has status=DONE because the file is
+// written after completion. We therefore never see RUNNING/IN_PROGRESS.
+// Instead we scan the last N entries by created_at timestamp and use a
+// 30-second recency window to determine the current state.
+const RECENCY_WINDOW_MS = 30_000;
+
+function classifyStatusFromLines(lines) {
+  if (!lines.length) return { state: 'idle', label: 'Idle', description: 'No activity' };
+
+  const now = Date.now();
+
+  // Walk backwards through the last 40 entries looking for signals
+  const recent = lines.slice(-40);
+
+  // --- Pass 1: scan for waiting (ask_permission / ask_question) ---
+  // These are highest priority — user must respond before anything else.
+  for (let i = recent.length - 1; i >= 0; i--) {
+    const entry = recent[i];
+    const age = now - new Date(entry.created_at || 0).getTime();
+    if (age > RECENCY_WINDOW_MS) break; // older than window, stop
+
+    // PLANNER_RESPONSE with ask_permission/ask_question tool calls
+    if (entry.tool_calls && entry.tool_calls.length > 0) {
+      const state = toolNameToState(entry.tool_calls[0]?.name || entry.tool_calls[0]?.function?.name);
+      if (state === 'waiting') {
+        return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your input' };
       }
-      
-      const finishMatch = line.content.match(/Task id "([^"]+)" finished/);
-      if (finishMatch) finishedTasks.add(finishMatch[1]);
+    }
+    // Tool result type is ASK_PERMISSION
+    const t = (entry.type || '').toUpperCase();
+    if (t === 'ASK_PERMISSION' || t === 'ASK_QUESTION') {
+      return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your input' };
     }
   }
-  const activeTasks = [];
-  for (const [id, desc] of startedTasks.entries()) {
-    if (!finishedTasks.has(id)) activeTasks.push(desc);
+
+  // --- Pass 2: find the most recent active tool action within the window ---
+  let bestActiveState = null;
+  for (let i = recent.length - 1; i >= 0; i--) {
+    const entry = recent[i];
+    const age = now - new Date(entry.created_at || 0).getTime();
+    if (age > RECENCY_WINDOW_MS) break;
+
+    const t = (entry.type || '').toUpperCase();
+
+    // A PLANNER_RESPONSE with tool_calls means a tool was just dispatched
+    if (t === 'PLANNER_RESPONSE' && entry.tool_calls && entry.tool_calls.length > 0) {
+      const toolName = entry.tool_calls[0]?.name || entry.tool_calls[0]?.function?.name || '';
+      const state = toolNameToState(toolName);
+      if (state && state !== 'waiting') {
+        bestActiveState = { state, ...TOOL_LABELS[state] };
+        break;
+      }
+    }
+
+    // A tool result entry (e.g. RUN_COMMAND, VIEW_FILE) means the tool ran
+    const state = toolNameToState(t);
+    if (state && state !== 'waiting') {
+      bestActiveState = { state, ...TOOL_LABELS[state] };
+      break;
+    }
   }
 
+  if (bestActiveState) return bestActiveState;
+
+  // --- Pass 3: determine idle vs thinking from the very last entry ---
   const last = lines[lines.length - 1];
-  const rawType  = last?.type   || '';
-  const type     = rawType.toUpperCase();
-  const source   = last?.source || '';
-  const status   = last?.status || '';
-  const toolCalls = last?.tool_calls || [];
+  const lastType = (last?.type || '').toUpperCase();
+  const lastSource = last?.source || '';
 
-  // ── Pending confirmation ──────────────────────────────────────────────────
-  if (status === 'WAITING' || status === 'PENDING') {
-    return { state: 'waiting', label: 'Waiting for You', description: 'A command is pending your approval' };
+  // User just sent a message → agent is thinking
+  if (lastType === 'USER_INPUT') {
+    return { state: 'thinking', label: 'Thinking', description: 'Processing your request' };
   }
 
-  // ── Deterministic State Machine ───────────────────────────────────────────
-  // If the agent is currently streaming text or executing a tool:
-  if (status === 'RUNNING' || status === 'IN_PROGRESS') {
-    if (['ASK_QUESTION', 'ASK_PERMISSION'].includes(type)) {
-      return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your input' };
-    }
-
-    return getActiveState(type, toolCalls);
+  // System ephemeral message → agent is being briefed, about to act
+  if (lastSource === 'SYSTEM' || lastType.includes('MESSAGE')) {
+    return { state: 'thinking', label: 'Thinking', description: 'Processing…' };
   }
 
-  // If the last step is DONE, we look at what it was to know what happens next:
-  if (status === 'DONE') {
-    // 1. If the user just typed, the agent is thinking of a response
-    if (type === 'USER_INPUT') {
-      return { state: 'thinking', label: 'Thinking', description: 'Processing your request' };
-    }
-
-    // 2. If the system just sent a message (e.g. task completed, error), the agent wakes up to think
-    if (source === 'SYSTEM' || type.includes('MESSAGE')) {
-      return { state: 'thinking', label: 'Thinking', description: 'Reading system update' };
-    }
-
-    // 3. The agent just requested a tool. It is either executing or blocked waiting for your permission.
-    if (toolCalls.length > 0) {
-      let actionName = (toolCalls[0]?.name || toolCalls[0]?.function?.name || '').toUpperCase();
-      actionName = actionName.replace(/^DEFAULT_API:/, '');
-      
-    if (['ASK_QUESTION', 'ASK_PERMISSION'].includes(actionName)) {
-      return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your input' };
-    }
-      // Any other tool sitting in PLANNER_RESPONSE (DONE) is actively executing
-      return getActiveState(actionName, toolCalls);
-    }
-
-    // 4. A tool just finished executing. The LLM is thinking about the result.
-    if (isToolType(type) || type === 'CODE_ACTION') {
-      return { state: 'thinking', label: 'Thinking', description: 'Thinking about the result' };
-    }
-
-    // 5. If the agent just finished outputting text WITH NO TOOLS, its turn is officially over.
-    if (type === 'PLANNER_RESPONSE' || type === 'GENERIC') {
-      if (activeTasks.length > 0) {
-        const desc = activeTasks[0];
-        const d = activeTasks.length === 1 ? desc : `${activeTasks.length} tasks: ${desc}`;
-        return { state: 'running', label: 'Running', description: d };
-      }
-      return { state: 'idle', label: 'Idle', description: 'Waiting for your message' };
-    }
+  // PLANNER_RESPONSE with no tools and no recent tool activity → truly idle
+  if (lastType === 'PLANNER_RESPONSE' && (!last.tool_calls || last.tool_calls.length === 0)) {
+    return { state: 'idle', label: 'Idle', description: 'Waiting for your message' };
   }
 
-  // Fallback
+  // Default: still thinking/working
   return { state: 'thinking', label: 'Thinking', description: 'Processing…' };
-}
-
-function isToolType(type) {
-  const allTools = [
-    'WRITE_TO_FILE', 'REPLACE_FILE_CONTENT', 'MULTI_REPLACE_FILE_CONTENT',
-    'RUN_COMMAND', 'MANAGE_TASK', 'MANAGE_SUBAGENTS',
-    'VIEW_FILE', 'GREP_SEARCH', 'SEARCH_WEB', 'READ_URL_CONTENT', 'LIST_DIR', 'READ_URL', 'ASK_PERMISSION', 'LIST_PERMISSIONS',
-    'INVOKE_SUBAGENT', 'SEND_MESSAGE', 'DEFINE_SUBAGENT',
-    'GENERATE_IMAGE', 'ASK_QUESTION', 'CODE_ACTION'
-  ];
-  return allTools.includes(type);
-}
-
-function getActiveState(type, toolCalls) {
-  const CODING   = ['WRITE_TO_FILE', 'REPLACE_FILE_CONTENT', 'MULTI_REPLACE_FILE_CONTENT', 'CODE_ACTION'];
-  const COMMAND  = ['RUN_COMMAND', 'MANAGE_TASK', 'MANAGE_SUBAGENTS'];
-  const RESEARCH = ['VIEW_FILE', 'GREP_SEARCH', 'SEARCH_WEB', 'READ_URL_CONTENT', 'LIST_DIR', 'READ_URL', 'ASK_PERMISSION', 'LIST_PERMISSIONS'];
-  const DELEGATE = ['INVOKE_SUBAGENT', 'SEND_MESSAGE', 'DEFINE_SUBAGENT'];
-  const IMAGE    = ['GENERATE_IMAGE'];
-  const CONFIRM  = ['ASK_QUESTION'];
-
-  // Determine the primary action name
-  let actionName = type.toUpperCase();
-  if (toolCalls && toolCalls.length > 0) {
-    actionName = (toolCalls[0]?.name || toolCalls[0]?.function?.name || '').toUpperCase();
-    actionName = actionName.replace(/^DEFAULT_API:/, '');
-  }
-
-  if (CODING.includes(actionName))   return { state: 'coding',      label: 'Coding',      description: 'Editing files' };
-  if (COMMAND.includes(actionName))  return { state: 'running',     label: 'Running',     description: 'Executing terminal command' };
-  if (RESEARCH.includes(actionName)) return { state: 'researching', label: 'Researching', description: 'Gathering context' };
-  if (DELEGATE.includes(actionName)) return { state: 'delegating',  label: 'Delegating',  description: 'Managing subagents' };
-  if (IMAGE.includes(actionName))    return { state: 'thinking',    label: 'Generating',  description: 'Creating image' };
-  if (CONFIRM.includes(actionName))  return { state: 'waiting',     label: 'Asking You',  description: 'Awaiting your answer' };
-
-  if (toolCalls && toolCalls.length > 0) {
-    return { state: 'thinking', label: 'Thinking', description: `Using tool: ${actionName.toLowerCase()}` };
-  }
-
-  return { state: 'thinking', label: 'Thinking', description: 'Generating response' };
 }
 
 
