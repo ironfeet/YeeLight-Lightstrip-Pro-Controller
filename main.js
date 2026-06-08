@@ -276,41 +276,59 @@ function toolNameToState(name) {
 // ── Core classifier ────────────────────────────────────────────────────────
 // Key insight: every transcript entry has status=DONE because the file is
 // written after completion. We therefore never see RUNNING/IN_PROGRESS.
-// Instead we scan the last N entries by created_at timestamp and use a
-// 30-second recency window to determine the current state.
+// We use two strategies:
+//   1. "Waiting" detection: find the last ask_permission/ask_question call
+//      and check whether it has been answered yet (no GENERIC result after it).
+//      This is time-UNBOUNDED so it works even if user sits on the dialog for minutes.
+//   2. Active tool detection: 30-second recency window on recent tool entries.
 const RECENCY_WINDOW_MS = 30_000;
 
 function classifyStatusFromLines(lines) {
   if (!lines.length) return { state: 'idle', label: 'Idle', description: 'No activity' };
 
   const now = Date.now();
+  const recent = lines.slice(-60);
 
-  // Walk backwards through the last 40 entries looking for signals
-  const recent = lines.slice(-40);
-
-  // --- Pass 1: scan for waiting (ask_permission / ask_question) ---
-  // These are highest priority — user must respond before anything else.
+  // --- Pass 1: Detect UNANSWERED ask_permission / ask_question ---
+  // Walk backwards to find the most recent permission/question request.
+  // If the entry right after it is NOT a GENERIC result (approved/denied),
+  // the user is still waiting — regardless of how long ago it was asked.
   for (let i = recent.length - 1; i >= 0; i--) {
     const entry = recent[i];
-    const age = now - new Date(entry.created_at || 0).getTime();
-    if (age > RECENCY_WINDOW_MS) break; // older than window, stop
-
-    // PLANNER_RESPONSE with ask_permission/ask_question tool calls
-    if (entry.tool_calls && entry.tool_calls.length > 0) {
-      const state = toolNameToState(entry.tool_calls[0]?.name || entry.tool_calls[0]?.function?.name);
-      if (state === 'waiting') {
-        return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your input' };
-      }
-    }
-    // Tool result type is ASK_PERMISSION
     const t = (entry.type || '').toUpperCase();
-    if (t === 'ASK_PERMISSION' || t === 'ASK_QUESTION') {
-      return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your input' };
+    const tc = entry.tool_calls || [];
+
+    const isPermissionCall = (
+      (t === 'PLANNER_RESPONSE' && tc.length > 0 &&
+        ['ASK_PERMISSION', 'ASK_QUESTION'].includes(
+          (tc[0]?.name || tc[0]?.function?.name || '').toUpperCase().replace(/^DEFAULT_API:/, '')
+        )
+      )
+    );
+
+    if (isPermissionCall) {
+      // Check if the next entry answers this (GENERIC result or USER_INPUT)
+      const next = recent[i + 1];
+      if (!next) {
+        // Nothing after it — still waiting
+        return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
+      }
+      const nextType = (next.type || '').toUpperCase();
+      const nextContent = (next.content || '').toLowerCase();
+      // GENERIC with "permission" in content = the answer arrived
+      if (nextType === 'GENERIC' || nextType === 'USER_INPUT') {
+        // Answered — stop looking for waiting state
+        break;
+      }
+      // Any other type after the permission call = still pending
+      return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
     }
+
+    // If we hit a USER_INPUT before finding any permission call, user responded — stop
+    if (t === 'USER_INPUT') break;
   }
 
-  // --- Pass 2: find the most recent active tool action within the window ---
-  let bestActiveState = null;
+  // --- Pass 2: Active tool in the last 30 seconds ---
   for (let i = recent.length - 1; i >= 0; i--) {
     const entry = recent[i];
     const age = now - new Date(entry.created_at || 0).getTime();
@@ -318,47 +336,37 @@ function classifyStatusFromLines(lines) {
 
     const t = (entry.type || '').toUpperCase();
 
-    // A PLANNER_RESPONSE with tool_calls means a tool was just dispatched
+    // PLANNER_RESPONSE with tool_calls = tool was dispatched
     if (t === 'PLANNER_RESPONSE' && entry.tool_calls && entry.tool_calls.length > 0) {
-      const toolName = entry.tool_calls[0]?.name || entry.tool_calls[0]?.function?.name || '';
+      const toolName = (entry.tool_calls[0]?.name || entry.tool_calls[0]?.function?.name || '').toUpperCase().replace(/^DEFAULT_API:/, '');
       const state = toolNameToState(toolName);
       if (state && state !== 'waiting') {
-        bestActiveState = { state, ...TOOL_LABELS[state] };
-        break;
+        return { state, ...TOOL_LABELS[state] };
       }
     }
 
-    // A tool result entry (e.g. RUN_COMMAND, VIEW_FILE) means the tool ran
+    // Tool result entry (RUN_COMMAND, VIEW_FILE, etc.)
     const state = toolNameToState(t);
     if (state && state !== 'waiting') {
-      bestActiveState = { state, ...TOOL_LABELS[state] };
-      break;
+      return { state, ...TOOL_LABELS[state] };
     }
   }
 
-  if (bestActiveState) return bestActiveState;
-
-  // --- Pass 3: determine idle vs thinking from the very last entry ---
+  // --- Pass 3: Idle vs Thinking from the last entry ---
   const last = lines[lines.length - 1];
   const lastType = (last?.type || '').toUpperCase();
   const lastSource = last?.source || '';
 
-  // User just sent a message → agent is thinking
   if (lastType === 'USER_INPUT') {
     return { state: 'thinking', label: 'Thinking', description: 'Processing your request' };
   }
-
-  // System ephemeral message → agent is being briefed, about to act
   if (lastSource === 'SYSTEM' || lastType.includes('MESSAGE')) {
     return { state: 'thinking', label: 'Thinking', description: 'Processing…' };
   }
-
-  // PLANNER_RESPONSE with no tools and no recent tool activity → truly idle
   if (lastType === 'PLANNER_RESPONSE' && (!last.tool_calls || last.tool_calls.length === 0)) {
     return { state: 'idle', label: 'Idle', description: 'Waiting for your message' };
   }
 
-  // Default: still thinking/working
   return { state: 'thinking', label: 'Thinking', description: 'Processing…' };
 }
 
