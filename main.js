@@ -273,6 +273,24 @@ function toolNameToState(name) {
   return null;
 }
 
+// Extract a short human-readable description from a tool call's args.
+// Prefers toolSummary (noun phrase), then toolAction (verb phrase).
+function extractToolDescription(toolCall) {
+  try {
+    const args = toolCall?.args || {};
+    let desc = args.toolSummary || args.toolAction || '';
+    // Args may be JSON-encoded strings (e.g. '"Read file"') — unwrap them
+    if (typeof desc === 'string' && desc.startsWith('"') && desc.endsWith('"')) {
+      desc = JSON.parse(desc);
+    }
+    if (typeof desc === 'string' && desc.length > 0) {
+      // Trim to 50 chars for display
+      return desc.length > 50 ? desc.substring(0, 47) + '...' : desc;
+    }
+  } catch {}
+  return null;
+}
+
 // ── Core classifier ────────────────────────────────────────────────────────
 // Key insight: every transcript entry has status=DONE because the file is
 // written after completion. We therefore never see RUNNING/IN_PROGRESS.
@@ -338,17 +356,25 @@ function classifyStatusFromLines(lines) {
 
     // PLANNER_RESPONSE with tool_calls = tool was dispatched
     if (t === 'PLANNER_RESPONSE' && entry.tool_calls && entry.tool_calls.length > 0) {
-      const toolName = (entry.tool_calls[0]?.name || entry.tool_calls[0]?.function?.name || '').toUpperCase().replace(/^DEFAULT_API:/, '');
+      const tc0 = entry.tool_calls[0];
+      const toolName = (tc0?.name || tc0?.function?.name || '').toUpperCase().replace(/^DEFAULT_API:/, '');
       const state = toolNameToState(toolName);
       if (state && state !== 'waiting') {
-        return { state, ...TOOL_LABELS[state] };
+        const base = TOOL_LABELS[state];
+        const desc = extractToolDescription(tc0) || base.description;
+        return { state, label: base.label, description: desc };
       }
     }
 
-    // Tool result entry (RUN_COMMAND, VIEW_FILE, etc.)
+    // Tool result entry (RUN_COMMAND, VIEW_FILE, etc.) — look back one step for the dispatching PLANNER_RESPONSE
     const state = toolNameToState(t);
     if (state && state !== 'waiting') {
-      return { state, ...TOOL_LABELS[state] };
+      const base = TOOL_LABELS[state];
+      // The previous entry should be the PLANNER_RESPONSE that dispatched this tool
+      const prev = recent[i - 1];
+      const prevTc = prev?.tool_calls?.[0];
+      const desc = extractToolDescription(prevTc) || base.description;
+      return { state, label: base.label, description: desc };
     }
   }
 
