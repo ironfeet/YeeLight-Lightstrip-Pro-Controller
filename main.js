@@ -338,7 +338,7 @@ function extractToolDescription(toolCall) {
 //      but NO subsequent RUN_COMMAND result — user is staring at the approval dialog.
 //      Once approved, RUN_COMMAND appears immediately.
 //   4. Active tools: use a 30s recency window on recent tool entries.
-const RECENCY_WINDOW_MS = 120_000;
+const RECENCY_WINDOW_MS = 600_000;
 // How long a tool can be "dispatched but no result" before we assume it needs approval.
 // Auto-approved tools (view_file, grep_search, replace_file_content) complete in <2s.
 // If a PLANNER_RESPONSE+tool has been the last entry for >3s → approval pending.
