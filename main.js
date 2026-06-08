@@ -333,6 +333,7 @@ const APPROVAL_PENDING_MS = 3_000;
 // Tools that require explicit user approval before executing
 const APPROVAL_REQUIRED_TOOLS = new Set([
   'RUN_COMMAND', 'UNSANDBOXED',
+  'WRITE_TO_FILE', 'REPLACE_FILE_CONTENT', 'MULTI_REPLACE_FILE_CONTENT'
 ]);
 
 function classifyStatusFromLines(lines) {
