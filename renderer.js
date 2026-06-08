@@ -502,6 +502,10 @@ function bindEvents() {
     document.getElementById('screen-threshold-val').textContent = this.value;
   });
 
+  document.getElementById('screen-show-preview').addEventListener('change', function () {
+    document.getElementById('screen-preview-wrap').classList.toggle('hidden', !this.checked);
+  });
+
   // Mode 2 interval
   document.getElementById('agent-interval').addEventListener('input', function () {
     mode2Interval = parseInt(this.value);

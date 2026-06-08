@@ -391,6 +391,65 @@ input[type="range"]::-webkit-slider-thumb {
   flex-shrink: 0;
 }
 
+/* ── Preview wrap collapse ───────────────────────────────────────────────── */
+#screen-preview-wrap {
+  overflow: hidden;
+  max-height: 120px;
+  transition: max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
+  opacity: 1;
+  margin-bottom: 4px;
+}
+#screen-preview-wrap.hidden {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+}
+
+/* ── Toggle switch ───────────────────────────────────────────────────────── */
+.control-row--toggle { cursor: pointer; }
+
+.toggle-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.toggle-wrap input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-track {
+  display: inline-flex;
+  align-items: center;
+  width: 36px;
+  height: 20px;
+  background: var(--surface-2);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  transition: background 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.toggle-wrap input[type="checkbox"]:checked + .toggle-track {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.toggle-thumb {
+  display: block;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  margin-left: 2px;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+.toggle-wrap input[type="checkbox"]:checked + .toggle-track .toggle-thumb {
+  transform: translateX(16px);
+}
+
+
 /* ── Settings Panel ──────────────────────────────────────────────────────── */
 .settings-title {
   font-size: 14px;
