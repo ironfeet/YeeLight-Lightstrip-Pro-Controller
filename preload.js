@@ -20,7 +20,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Mode 3: Antigravity IDE status
   getIDEStatus: () => ipcRenderer.invoke('get-ide-status'),
 
-  // Window controls
+  // Window & Tray controls
   minimize: () => ipcRenderer.send('window-minimize'),
   close: () => ipcRenderer.send('window-close'),
+  updateTray: (dataURL) => ipcRenderer.send('update-tray', dataURL),
 });

@@ -8,7 +8,7 @@
  *   - No user input passed to shell or file paths
  */
 
-const { app, BrowserWindow, ipcMain, desktopCapturer, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, screen, Tray, nativeImage, Menu } = require('electron');
 const path = require('path');
 
 const fs = require('fs');
@@ -105,11 +105,29 @@ function createWindow() {
   }
 }
 
+let tray = null;
+
 app.whenReady().then(() => {
   if (process.platform === 'darwin') {
     app.dock.setIcon(path.join(__dirname, 'icon.png'));
   }
   createWindow();
+
+  // Create Menu Bar Tray Icon
+  tray = new Tray(nativeImage.createEmpty());
+  tray.setToolTip('Light Strip Pro');
+  const contextMenu = Menu.buildFromTemplate([
+    { label: 'Show App', click: () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } } },
+    { type: 'separator' },
+    { label: 'Quit', click: () => app.quit() }
+  ]);
+  tray.setContextMenu(contextMenu);
+  tray.on('click', () => {
+    if (mainWindow) {
+      mainWindow.isVisible() ? mainWindow.focus() : mainWindow.show();
+    }
+  });
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -123,9 +141,15 @@ app.on('window-all-closed', () => {
 ipcMain.handle('load-config', () => loadConfig());
 ipcMain.handle('save-config', (_event, config) => saveConfig(config));
 
-// ─── IPC: Window Controls ─────────────────────────────────────────────────────
+// ─── IPC: Window & Tray Controls ──────────────────────────────────────────────
 ipcMain.on('window-minimize', () => mainWindow?.minimize());
 ipcMain.on('window-close', () => mainWindow?.close());
+
+ipcMain.on('update-tray', (event, dataURL) => {
+  if (tray && dataURL) {
+    tray.setImage(nativeImage.createFromDataURL(dataURL));
+  }
+});
 
 // ─── IPC: Mode 1 — Screen Capture ────────────────────────────────────────────
 ipcMain.handle('capture-screen', async () => {
@@ -317,30 +341,25 @@ function classifyStatusFromLines(lines) {
   const now = Date.now();
   const recent = lines.slice(-60);
 
-  // --- Pass 1: Check the very last entry for pending approval ---
-  // This covers BOTH ask_permission and run_command approval dialogs.
   const last = recent[recent.length - 1];
   const lastType = (last?.type || '').toUpperCase();
   const lastTc = last?.tool_calls || [];
   const lastToolName = (lastTc[0]?.name || lastTc[0]?.function?.name || '').toUpperCase().replace(/^DEFAULT_API:/, '');
   const lastAge = now - new Date(last?.created_at || 0).getTime();
 
+  let debugReason = 'start';
+
   if (lastType === 'PLANNER_RESPONSE' && lastTc.length > 0) {
-    // Case A: explicit ask_permission / ask_question
     if (lastToolName === 'ASK_PERMISSION' || lastToolName === 'ASK_QUESTION') {
       return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
     }
 
-    // Case B: run_command (or other approval-required tool) dispatched,
-    // but no tool-result entry has appeared yet after >3s → user is on approval dialog
     if (APPROVAL_REQUIRED_TOOLS.has(lastToolName) && lastAge > APPROVAL_PENDING_MS) {
       const desc = extractToolDescription(lastTc[0]) || 'Command pending your approval';
       return { state: 'waiting', label: 'Waiting for You', description: desc };
     }
   }
 
-  // --- Pass 2: Walk backwards to find an unanswered ask_permission ---
-  // Handles the case where ask_permission was dispatched but followed by unexpected entries.
   for (let i = recent.length - 1; i >= 0; i--) {
     const entry = recent[i];
     const t = (entry.type || '').toUpperCase();
@@ -348,37 +367,41 @@ function classifyStatusFromLines(lines) {
     const toolName = (tc[0]?.name || tc[0]?.function?.name || '').toUpperCase().replace(/^DEFAULT_API:/, '');
 
     if (t === 'PLANNER_RESPONSE' && (toolName === 'ASK_PERMISSION' || toolName === 'ASK_QUESTION')) {
-      // Check whether the entry immediately after is an answer (GENERIC result)
       const next = recent[i + 1];
       if (!next) {
         return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
       }
       const nextType = (next.type || '').toUpperCase();
       if (nextType === 'GENERIC' || nextType === 'USER_INPUT') {
-        break; // answered — no longer waiting
+        break; 
       }
-      // Something else follows but no answer yet
       return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
     }
 
-    // Hit a USER_INPUT — user already sent a new message, definitely not waiting
     if (t === 'USER_INPUT') break;
-    // Hit a tool result for run_command — approval was given, not waiting
     if (t === 'RUN_COMMAND') break;
   }
 
-  // --- Pass 3: Active tool in the last 30 seconds ---
   for (let i = recent.length - 1; i >= 0; i--) {
     const entry = recent[i];
     const age = now - new Date(entry.created_at || 0).getTime();
-    if (age > RECENCY_WINDOW_MS) break;
+    if (age > RECENCY_WINDOW_MS) {
+      debugReason = 'pass3_break_age_' + age;
+      break;
+    }
 
     const t = (entry.type || '').toUpperCase();
 
-    // PLANNER_RESPONSE with tool_calls = tool was dispatched
     if (t === 'PLANNER_RESPONSE' && entry.tool_calls && entry.tool_calls.length > 0) {
       const tc0 = entry.tool_calls[0];
       const toolName = (tc0?.name || tc0?.function?.name || '').toUpperCase().replace(/^DEFAULT_API:/, '');
+      
+      // If we see a dispatched command but haven't hit its result yet, it's blocked on user input!
+      if (APPROVAL_REQUIRED_TOOLS.has(toolName) && age > APPROVAL_PENDING_MS) {
+        const desc = extractToolDescription(tc0) || 'Command pending your approval';
+        return { state: 'waiting', label: 'Waiting for You', description: desc };
+      }
+
       const state = toolNameToState(toolName);
       if (state && state !== 'waiting') {
         const base = TOOL_LABELS[state];
@@ -387,7 +410,6 @@ function classifyStatusFromLines(lines) {
       }
     }
 
-    // Tool result entry (RUN_COMMAND, VIEW_FILE, etc.) — look back one step for description
     const state = toolNameToState(t);
     if (state && state !== 'waiting') {
       const base = TOOL_LABELS[state];
@@ -398,18 +420,17 @@ function classifyStatusFromLines(lines) {
     }
   }
 
-  // --- Pass 4: Idle vs Thinking from the last entry ---
   if (lastType === 'USER_INPUT') {
     return { state: 'thinking', label: 'Thinking', description: 'Processing your request' };
   }
   if ((last?.source || '') === 'SYSTEM' || lastType.includes('MESSAGE')) {
-    return { state: 'thinking', label: 'Thinking', description: 'Processing…' };
+    return { state: 'thinking', label: 'Thinking', description: 'Processing… (' + debugReason + ')' };
   }
   if (lastType === 'PLANNER_RESPONSE' && lastTc.length === 0) {
     return { state: 'idle', label: 'Idle', description: 'Waiting for your message' };
   }
 
-  return { state: 'thinking', label: 'Thinking', description: 'Processing…' };
+  return { state: 'thinking', label: 'Thinking', description: 'Processing… (' + debugReason + ')' };
 }
 
 

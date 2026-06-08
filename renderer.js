@@ -131,7 +131,38 @@ function updateStatusPanel(prefix, status) {
 
 // ── Send colour to light ──────────────────────────────────────────────────────
 let lastSentHash = '';
+let currentR = 255, currentG = 255, currentB = 255;
+
+function updateTrayIcon(r, g, b, isOn) {
+  if (!window.electronAPI.updateTray) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = 16;
+  canvas.height = 16;
+  const ctx = canvas.getContext('2d');
+  
+  ctx.clearRect(0, 0, 16, 16);
+  ctx.beginPath();
+  ctx.arc(8, 8, 6, 0, 2 * Math.PI);
+  
+  if (isOn) {
+    ctx.fillStyle = `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  } else {
+    ctx.fillStyle = '#666';
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#333';
+  }
+  ctx.fill();
+  ctx.stroke();
+  
+  window.electronAPI.updateTray(canvas.toDataURL('image/png'));
+}
+
 async function sendColor(r, g, b, scaleLuminance = false) {
+  currentR = r; currentG = g; currentB = b;
+  updateTrayIcon(r, g, b, lightOn);
+
   // Always update the UI preview strip immediately
   setAccentColor(r, g, b);
 
@@ -432,6 +463,8 @@ function activateMode(mode) {
 // ── Power Toggle ──────────────────────────────────────────────────────────────
 function setLightOn(on) {
   lightOn = on;
+  updateTrayIcon(currentR, currentG, currentB, lightOn);
+  
   const toggle = document.getElementById('power-toggle');
   const label  = document.getElementById('power-label');
   toggle.setAttribute('aria-checked', String(on));
