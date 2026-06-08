@@ -292,14 +292,24 @@ function extractToolDescription(toolCall) {
 }
 
 // ── Core classifier ────────────────────────────────────────────────────────
-// Key insight: every transcript entry has status=DONE because the file is
-// written after completion. We therefore never see RUNNING/IN_PROGRESS.
-// We use two strategies:
-//   1. "Waiting" detection: find the last ask_permission/ask_question call
-//      and check whether it has been answered yet (no GENERIC result after it).
-//      This is time-UNBOUNDED so it works even if user sits on the dialog for minutes.
-//   2. Active tool detection: 30-second recency window on recent tool entries.
+// CRITICAL INSIGHTS from transcript analysis:
+//   1. Every entry is status=DONE — file is only written AFTER steps complete.
+//   2. WAITING for ask_permission: transcript ends with PLANNER_RESPONSE+ask_permission
+//      followed by a GENERIC result. If no GENERIC follows → still waiting.
+//   3. WAITING for run_command approval: transcript ends with PLANNER_RESPONSE+run_command
+//      but NO subsequent RUN_COMMAND result — user is staring at the approval dialog.
+//      Once approved, RUN_COMMAND appears immediately.
+//   4. Active tools: use a 30s recency window on recent tool entries.
 const RECENCY_WINDOW_MS = 30_000;
+// How long a tool can be "dispatched but no result" before we assume it needs approval.
+// Auto-approved tools (view_file, grep_search, replace_file_content) complete in <2s.
+// If a PLANNER_RESPONSE+tool has been the last entry for >3s → approval pending.
+const APPROVAL_PENDING_MS = 3_000;
+
+// Tools that require explicit user approval before executing
+const APPROVAL_REQUIRED_TOOLS = new Set([
+  'RUN_COMMAND', 'UNSANDBOXED',
+]);
 
 function classifyStatusFromLines(lines) {
   if (!lines.length) return { state: 'idle', label: 'Idle', description: 'No activity' };
@@ -307,46 +317,57 @@ function classifyStatusFromLines(lines) {
   const now = Date.now();
   const recent = lines.slice(-60);
 
-  // --- Pass 1: Detect UNANSWERED ask_permission / ask_question ---
-  // Walk backwards to find the most recent permission/question request.
-  // If the entry right after it is NOT a GENERIC result (approved/denied),
-  // the user is still waiting — regardless of how long ago it was asked.
+  // --- Pass 1: Check the very last entry for pending approval ---
+  // This covers BOTH ask_permission and run_command approval dialogs.
+  const last = recent[recent.length - 1];
+  const lastType = (last?.type || '').toUpperCase();
+  const lastTc = last?.tool_calls || [];
+  const lastToolName = (lastTc[0]?.name || lastTc[0]?.function?.name || '').toUpperCase().replace(/^DEFAULT_API:/, '');
+  const lastAge = now - new Date(last?.created_at || 0).getTime();
+
+  if (lastType === 'PLANNER_RESPONSE' && lastTc.length > 0) {
+    // Case A: explicit ask_permission / ask_question
+    if (lastToolName === 'ASK_PERMISSION' || lastToolName === 'ASK_QUESTION') {
+      return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
+    }
+
+    // Case B: run_command (or other approval-required tool) dispatched,
+    // but no tool-result entry has appeared yet after >3s → user is on approval dialog
+    if (APPROVAL_REQUIRED_TOOLS.has(lastToolName) && lastAge > APPROVAL_PENDING_MS) {
+      const desc = extractToolDescription(lastTc[0]) || 'Command pending your approval';
+      return { state: 'waiting', label: 'Waiting for You', description: desc };
+    }
+  }
+
+  // --- Pass 2: Walk backwards to find an unanswered ask_permission ---
+  // Handles the case where ask_permission was dispatched but followed by unexpected entries.
   for (let i = recent.length - 1; i >= 0; i--) {
     const entry = recent[i];
     const t = (entry.type || '').toUpperCase();
     const tc = entry.tool_calls || [];
+    const toolName = (tc[0]?.name || tc[0]?.function?.name || '').toUpperCase().replace(/^DEFAULT_API:/, '');
 
-    const isPermissionCall = (
-      (t === 'PLANNER_RESPONSE' && tc.length > 0 &&
-        ['ASK_PERMISSION', 'ASK_QUESTION'].includes(
-          (tc[0]?.name || tc[0]?.function?.name || '').toUpperCase().replace(/^DEFAULT_API:/, '')
-        )
-      )
-    );
-
-    if (isPermissionCall) {
-      // Check if the next entry answers this (GENERIC result or USER_INPUT)
+    if (t === 'PLANNER_RESPONSE' && (toolName === 'ASK_PERMISSION' || toolName === 'ASK_QUESTION')) {
+      // Check whether the entry immediately after is an answer (GENERIC result)
       const next = recent[i + 1];
       if (!next) {
-        // Nothing after it — still waiting
         return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
       }
       const nextType = (next.type || '').toUpperCase();
-      const nextContent = (next.content || '').toLowerCase();
-      // GENERIC with "permission" in content = the answer arrived
       if (nextType === 'GENERIC' || nextType === 'USER_INPUT') {
-        // Answered — stop looking for waiting state
-        break;
+        break; // answered — no longer waiting
       }
-      // Any other type after the permission call = still pending
+      // Something else follows but no answer yet
       return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
     }
 
-    // If we hit a USER_INPUT before finding any permission call, user responded — stop
+    // Hit a USER_INPUT — user already sent a new message, definitely not waiting
     if (t === 'USER_INPUT') break;
+    // Hit a tool result for run_command — approval was given, not waiting
+    if (t === 'RUN_COMMAND') break;
   }
 
-  // --- Pass 2: Active tool in the last 30 seconds ---
+  // --- Pass 3: Active tool in the last 30 seconds ---
   for (let i = recent.length - 1; i >= 0; i--) {
     const entry = recent[i];
     const age = now - new Date(entry.created_at || 0).getTime();
@@ -366,11 +387,10 @@ function classifyStatusFromLines(lines) {
       }
     }
 
-    // Tool result entry (RUN_COMMAND, VIEW_FILE, etc.) — look back one step for the dispatching PLANNER_RESPONSE
+    // Tool result entry (RUN_COMMAND, VIEW_FILE, etc.) — look back one step for description
     const state = toolNameToState(t);
     if (state && state !== 'waiting') {
       const base = TOOL_LABELS[state];
-      // The previous entry should be the PLANNER_RESPONSE that dispatched this tool
       const prev = recent[i - 1];
       const prevTc = prev?.tool_calls?.[0];
       const desc = extractToolDescription(prevTc) || base.description;
@@ -378,23 +398,20 @@ function classifyStatusFromLines(lines) {
     }
   }
 
-  // --- Pass 3: Idle vs Thinking from the last entry ---
-  const last = lines[lines.length - 1];
-  const lastType = (last?.type || '').toUpperCase();
-  const lastSource = last?.source || '';
-
+  // --- Pass 4: Idle vs Thinking from the last entry ---
   if (lastType === 'USER_INPUT') {
     return { state: 'thinking', label: 'Thinking', description: 'Processing your request' };
   }
-  if (lastSource === 'SYSTEM' || lastType.includes('MESSAGE')) {
+  if ((last?.source || '') === 'SYSTEM' || lastType.includes('MESSAGE')) {
     return { state: 'thinking', label: 'Thinking', description: 'Processing…' };
   }
-  if (lastType === 'PLANNER_RESPONSE' && (!last.tool_calls || last.tool_calls.length === 0)) {
+  if (lastType === 'PLANNER_RESPONSE' && lastTc.length === 0) {
     return { state: 'idle', label: 'Idle', description: 'Waiting for your message' };
   }
 
   return { state: 'thinking', label: 'Thinking', description: 'Processing…' };
 }
+
 
 
 // ─── IPC: Mode 2 — Antigravity App Agent Status ──────────────────────────────
