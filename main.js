@@ -273,7 +273,7 @@ function classifyStatus(brainDir) {
   // LOG STATE CHANGES TO DESKTOP SO USER CAN VERIFY APP'S INTERNAL EVALUATION
   if (status.state !== lastLoggedState || status.description !== lastLoggedDesc) {
     try {
-      const logFile = path.join(os.homedir(), 'Desktop', 'agent_status_log.txt');
+      const logFile = path.join(__dirname, 'agent_status_log.txt');
       fs.appendFileSync(logFile, `[${new Date().toISOString()}] State: ${status.state.padEnd(10)} | Desc: ${status.description}\n`);
     } catch(e) {}
     lastLoggedState = status.state;
@@ -369,8 +369,8 @@ function classifyStatusFromLines(lines) {
       return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
     }
 
-    if (APPROVAL_REQUIRED_TOOLS.has(lastToolName) && lastAge > APPROVAL_PENDING_MS) {
-      const desc = extractToolDescription(lastTc[0]) || 'Command pending your approval';
+    if (lastAge > APPROVAL_PENDING_MS) {
+      const desc = extractToolDescription(lastTc[0]) || 'Action pending your approval';
       return { state: 'waiting', label: 'Waiting for You', description: desc };
     }
   }
