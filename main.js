@@ -362,74 +362,52 @@ function classifyStatusFromLines(lines) {
 
   const now = Date.now();
   const recent = lines.slice(-60);
-
-  const last = recent[recent.length - 1];
-  const lastType = (last?.type || '').toUpperCase();
-  const lastTc = last?.tool_calls || [];
-  const lastToolName = (lastTc[0]?.name || lastTc[0]?.function?.name || '').toUpperCase().replace(/^DEFAULT_API:/, '');
-  const lastAge = now - new Date(last?.created_at || 0).getTime();
-
-  let debugReason = 'start';
-
-  if (lastType === 'PLANNER_RESPONSE' && lastTc.length > 0) {
-    if (lastToolName === 'ASK_PERMISSION' || lastToolName === 'ASK_QUESTION') {
-      return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
-    }
-
-    if (lastAge > APPROVAL_PENDING_MS) {
-      const desc = extractToolDescription(lastTc[0]) || 'Action pending your approval';
-      return { state: 'waiting', label: 'Waiting for You', description: desc };
-    }
-  }
-
-  for (let i = recent.length - 1; i >= 0; i--) {
-    const entry = recent[i];
-    const t = (entry.type || '').toUpperCase();
-    const tc = entry.tool_calls || [];
-    const toolName = (tc[0]?.name || tc[0]?.function?.name || '').toUpperCase().replace(/^DEFAULT_API:/, '');
-
-    if (t === 'PLANNER_RESPONSE' && (toolName === 'ASK_PERMISSION' || toolName === 'ASK_QUESTION')) {
-      const next = recent[i + 1];
-      if (!next) {
-        return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
-      }
-      const nextType = (next.type || '').toUpperCase();
-      if (nextType === 'GENERIC' || nextType === 'USER_INPUT') {
-        break; 
-      }
-      return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
-    }
-
-    if (t === 'USER_INPUT') break;
-    if (t === 'RUN_COMMAND' && entry.status === 'DONE') break;
-  }
-
+  
+  // Walk backwards to find the exact semantic state
+  let sawUserInput = false;
+  
   for (let i = recent.length - 1; i >= 0; i--) {
     const entry = recent[i];
     const age = now - new Date(entry.created_at || 0).getTime();
-    if (age > RECENCY_WINDOW_MS) {
-      debugReason = 'pass3_break_age_' + age;
-      break;
-    }
+    if (age > RECENCY_WINDOW_MS) break;
 
     const t = (entry.type || '').toUpperCase();
 
-    if (t === 'PLANNER_RESPONSE' && entry.tool_calls && entry.tool_calls.length > 0) {
-      const tc0 = entry.tool_calls[0];
-      const toolName = (tc0?.name || tc0?.function?.name || '').toUpperCase().replace(/^DEFAULT_API:/, '');
-      
-      // If we see a dispatched command but haven't hit its result yet, it's blocked on user input!
-      // (We removed the APPROVAL_REQUIRED_TOOLS filter because depending on user settings, even read tools like VIEW_FILE might prompt for approval).
-      if (age > APPROVAL_PENDING_MS) {
-        const desc = extractToolDescription(tc0) || 'Action pending your approval';
-        return { state: 'waiting', label: 'Waiting for You', description: desc };
-      }
+    if (t === 'USER_INPUT') {
+      sawUserInput = true;
+      continue;
+    }
 
-      const state = toolNameToState(toolName);
-      if (state && state !== 'waiting') {
-        const base = TOOL_LABELS[state];
-        const desc = extractToolDescription(tc0) || base.description;
-        return { state, label: base.label, description: desc };
+    if (t === 'PLANNER_RESPONSE') {
+      if (entry.tool_calls && entry.tool_calls.length > 0) {
+        const tc0 = entry.tool_calls[0];
+        const toolName = (tc0?.name || tc0?.function?.name || '').toUpperCase().replace(/^DEFAULT_API:/, '');
+        
+        if (toolName === 'ASK_PERMISSION' || toolName === 'ASK_QUESTION') {
+           return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
+        }
+
+        // If age > APPROVAL_PENDING_MS, it's blocked pending approval
+        if (age > APPROVAL_PENDING_MS) {
+          const desc = extractToolDescription(tc0) || 'Action pending your approval';
+          return { state: 'waiting', label: 'Waiting / Busy', description: desc };
+        }
+
+        const state = toolNameToState(toolName);
+        if (state && state !== 'waiting') {
+          // If we hit a tool, but user input happened AFTER it, we are processing that input!
+          if (sawUserInput) return { state: 'thinking', label: 'Thinking', description: 'Processing your message' };
+          const base = TOOL_LABELS[state];
+          const desc = extractToolDescription(tc0) || base.description;
+          return { state, label: base.label, description: desc };
+        }
+      } else {
+        // Agent sent a message without tools. It is idle, unless the user replied.
+        if (sawUserInput) {
+          return { state: 'thinking', label: 'Thinking', description: 'Processing your message' };
+        } else {
+          return { state: 'idle', label: 'Idle', description: 'Waiting for your message' };
+        }
       }
     }
 
@@ -438,6 +416,12 @@ function classifyStatusFromLines(lines) {
       if (entry.status && entry.status !== 'DONE' && entry.status !== 'ERROR') {
         continue;
       }
+      
+      // If we are looking at a past tool but the user has already sent a new message, we are thinking
+      if (sawUserInput) {
+        return { state: 'thinking', label: 'Thinking', description: 'Processing your message' };
+      }
+
       const base = TOOL_LABELS[state];
       const prev = recent[i - 1];
       const prevTc = prev?.tool_calls?.[0];
@@ -446,17 +430,13 @@ function classifyStatusFromLines(lines) {
     }
   }
 
-  if (lastType === 'USER_INPUT') {
-    return { state: 'thinking', label: 'Thinking', description: 'Processing your request' };
-  }
-  if ((last?.source || '') === 'SYSTEM' || lastType.includes('MESSAGE')) {
-    return { state: 'thinking', label: 'Thinking', description: 'Processing… (' + debugReason + ')' };
-  }
-  if (lastType === 'PLANNER_RESPONSE' && lastTc.length === 0) {
-    return { state: 'idle', label: 'Idle', description: 'Waiting for your message' };
+  // If no identifiable state was found but user typed recently:
+  if (sawUserInput) {
+    return { state: 'thinking', label: 'Thinking', description: 'Processing your message' };
   }
 
-  return { state: 'thinking', label: 'Thinking', description: 'Processing… (' + debugReason + ')' };
+  // Fallback
+  return { state: 'idle', label: 'Idle', description: 'Waiting for your message' };
 }
 
 
