@@ -166,25 +166,26 @@ const canvas  = document.createElement('canvas');
 const ctx     = canvas.getContext('2d', { willReadFrequently: true });
 let mode1Timer = null;
 
-function applyBoost(r, g, b, boost) {
-  // Convert to HSL, boost saturation, convert back
-  const rn = r / 255, gn = g / 255, bn = b / 255;
-  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+// ── Color Utilities ───────────────────────────────────────────────────────────
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
   let h, s, l = (max + min) / 2;
   if (max === min) { h = s = 0; }
   else {
     const d = max - min;
     s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
     switch (max) {
-      case rn: h = (gn - bn) / d + (gn < bn ? 6 : 0); break;
-      case gn: h = (bn - rn) / d + 2; break;
-      default: h = (rn - gn) / d + 4;
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      default: h = (r - g) / d + 4;
     }
     h /= 6;
   }
-  s = Math.min(1, s * boost);
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
+  return [h, s, l];
+}
+
+function hslToRgb(h, s, l) {
   const hue2rgb = (p, q, t) => {
     if (t < 0) t += 1; if (t > 1) t -= 1;
     if (t < 1/6) return p + (q - p) * 6 * t;
@@ -192,11 +193,102 @@ function applyBoost(r, g, b, boost) {
     if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
     return p;
   };
+  if (s === 0) { const v = Math.round(l * 255); return [v, v, v]; }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
   return [
     Math.round(hue2rgb(p, q, h + 1/3) * 255),
     Math.round(hue2rgb(p, q, h)       * 255),
     Math.round(hue2rgb(p, q, h - 1/3) * 255),
   ];
+}
+
+/**
+ * Extract the most vibrant dominant color from ImageData.
+ *
+ * Algorithm:
+ * 1. Sample pixels on a grid (skip near-gray, near-black, near-white).
+ * 2. Bucket surviving pixels into 36 hue bins (10° each).
+ * 3. Pick the heaviest hue bin (weighted by saturation).
+ * 4. From that bin, compute the median hue and average saturation/lightness.
+ * 5. Clamp saturation to a high value and lightness to a vibrant range,
+ *    so the output is always punchy and visible on the light strip.
+ * 6. Fall back to the overall most saturated pixel if all pixels are gray.
+ */
+function extractVibrantColor(imageData, width, height) {
+  const data = imageData.data;
+  const STEP = Math.max(1, Math.floor(Math.min(width, height) / 32)); // ~32×32 samples max
+
+  const HUE_BINS = 36; // 10° per bin
+  const bins = Array.from({ length: HUE_BINS }, () => ({ weight: 0, hues: [], sats: [], lights: [] }));
+
+  let bestSat = 0, bestSatPixel = null; // fallback
+
+  for (let y = 0; y < height; y += STEP) {
+    for (let x = 0; x < width; x += STEP) {
+      const i = (y * width + x) * 4;
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+
+      const [h, s, l] = rgbToHsl(r, g, b);
+
+      // Track the most saturated pixel for fallback
+      if (s > bestSat) { bestSat = s; bestSatPixel = [h, s, l]; }
+
+      // Skip near-black (too dark to see on strip)
+      if (l < 0.08) continue;
+      // Skip near-white (washed out)
+      if (l > 0.92) continue;
+      // Skip near-gray (no useful hue information)
+      if (s < 0.12) continue;
+
+      const bin = Math.floor(h * HUE_BINS) % HUE_BINS;
+      const w = s * s; // weight by saturation² — more vivid pixels dominate
+      bins[bin].weight += w;
+      bins[bin].hues.push(h);
+      bins[bin].sats.push(s);
+      bins[bin].lights.push(l);
+    }
+  }
+
+  // Merge adjacent bins (wrap-around) so we don't split a single hue across boundary
+  const merged = bins.map((bin, i) => {
+    const prev = bins[(i - 1 + HUE_BINS) % HUE_BINS];
+    const next = bins[(i + 1) % HUE_BINS];
+    return {
+      weight: bin.weight + prev.weight * 0.3 + next.weight * 0.3,
+      hues:   [...bin.hues, ...prev.hues, ...next.hues],
+      sats:   [...bin.sats, ...prev.sats, ...next.sats],
+      lights: [...bin.lights, ...prev.lights, ...next.lights],
+    };
+  });
+
+  const dominant = merged.reduce((best, b) => b.weight > best.weight ? b : best, merged[0]);
+
+  let h, s, l;
+
+  if (dominant.weight === 0 || dominant.hues.length === 0) {
+    // All pixels were gray — use the most saturated pixel we found
+    if (bestSatPixel) {
+      [h, s, l] = bestSatPixel;
+    } else {
+      return null; // truly featureless frame, leave light as-is
+    }
+  } else {
+    // Median of hue values (robust against outliers)
+    const sortedHues = [...dominant.hues].sort((a, b) => a - b);
+    h = sortedHues[Math.floor(sortedHues.length / 2)];
+
+    // Average saturation and lightness of the dominant bin
+    s = dominant.sats.reduce((a, v) => a + v, 0) / dominant.sats.length;
+    l = dominant.lights.reduce((a, v) => a + v, 0) / dominant.lights.length;
+  }
+
+  // ── Vibrance boost: push saturation and normalize lightness ──────────────
+  s = Math.min(1, s * (config.saturationBoost || 1.5));   // user-controlled boost
+  s = Math.max(0.65, s);   // floor: always at least 65% saturated
+  l = Math.max(0.38, Math.min(0.62, l)); // clamp to vibrant mid-range (not too dark, not washed out)
+
+  return hslToRgb(h, s, l);
 }
 
 async function captureAndSend() {
@@ -210,48 +302,22 @@ async function captureAndSend() {
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
 
-      // Weighted grid sampling — center pixels weighted 3×
-      const w = img.width, h = img.height;
-      const samplePoints = [];
-      const grid = 8;
-      for (let xi = 0; xi < grid; xi++) {
-        for (let yi = 0; yi < grid; yi++) {
-          const x = Math.floor((xi + 0.5) * w / grid);
-          const y = Math.floor((yi + 0.5) * h / grid);
-          const cx = Math.abs(xi - (grid - 1) / 2) / ((grid - 1) / 2);
-          const cy = Math.abs(yi - (grid - 1) / 2) / ((grid - 1) / 2);
-          const weight = 1 + 2 * (1 - Math.max(cx, cy));
-          samplePoints.push({ x, y, weight });
-        }
-      }
+      const imageData = ctx.getImageData(0, 0, img.width, img.height);
+      const result = extractVibrantColor(imageData, img.width, img.height);
 
-      let rSum = 0, gSum = 0, bSum = 0, wSum = 0;
-      for (const { x, y, weight } of samplePoints) {
-        const px = ctx.getImageData(x, y, 1, 1).data;
-        rSum += px[0] * weight;
-        gSum += px[1] * weight;
-        bSum += px[2] * weight;
-        wSum += weight;
-      }
+      if (!result) return; // featureless frame, skip
 
-      let r = Math.round(rSum / wSum);
-      let g = Math.round(gSum / wSum);
-      let b = Math.round(bSum / wSum);
+      const [r, g, b] = result;
 
-      // Apply saturation boost
-      [r, g, b] = applyBoost(r, g, b, config.saturationBoost);
-
-      // Update screen panel UI (safe DOM methods)
+      // Update screen panel UI
       const hex = rgbToHex(r, g, b);
       document.getElementById('screen-color-preview').style.background = rgbToCss(r, g, b);
       document.getElementById('screen-hex').textContent = hex;
       document.getElementById('screen-rgb').textContent = `rgb(${r}, ${g}, ${b})`;
 
-      // Calculate and display physical brightness directly in UI
       const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
       const scale = Math.max(0.05, luminance);
       const targetBrightness = Math.round(config.brightness * scale);
-
       const bEl = document.getElementById('screen-brightness');
       if (bEl) bEl.textContent = `Brightness: ${targetBrightness}%`;
 
@@ -262,6 +328,7 @@ async function captureAndSend() {
     console.error('[Mode1] Capture error (non-sensitive):', e.message);
   }
 }
+
 
 function startMode1() {
   stopMode1();
