@@ -244,6 +244,9 @@ function extractRecentLogs(lines) {
   return logs.slice(-20); // Return last 20 log events
 }
 
+let lastLoggedState = '';
+let lastLoggedDesc = '';
+
 function classifyStatus(brainDir) {
   const transcript = findMostRecentTranscript(brainDir);
   if (!transcript) {
@@ -266,6 +269,17 @@ function classifyStatus(brainDir) {
   }
 
   const status = classifyStatusFromLines(lines);
+
+  // LOG STATE CHANGES TO DESKTOP SO USER CAN VERIFY APP'S INTERNAL EVALUATION
+  if (status.state !== lastLoggedState || status.description !== lastLoggedDesc) {
+    try {
+      const logFile = path.join(os.homedir(), 'Desktop', 'agent_status_log.txt');
+      fs.appendFileSync(logFile, `[${new Date().toISOString()}] State: ${status.state.padEnd(10)} | Desc: ${status.description}\n`);
+    } catch(e) {}
+    lastLoggedState = status.state;
+    lastLoggedDesc = status.description;
+  }
+
   return { ...status, logs };
 }
 
@@ -324,7 +338,7 @@ function extractToolDescription(toolCall) {
 //      but NO subsequent RUN_COMMAND result — user is staring at the approval dialog.
 //      Once approved, RUN_COMMAND appears immediately.
 //   4. Active tools: use a 30s recency window on recent tool entries.
-const RECENCY_WINDOW_MS = 30_000;
+const RECENCY_WINDOW_MS = 120_000;
 // How long a tool can be "dispatched but no result" before we assume it needs approval.
 // Auto-approved tools (view_file, grep_search, replace_file_content) complete in <2s.
 // If a PLANNER_RESPONSE+tool has been the last entry for >3s → approval pending.
