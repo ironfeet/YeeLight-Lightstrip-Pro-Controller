@@ -412,8 +412,9 @@ function classifyStatusFromLines(lines) {
       const toolName = (tc0?.name || tc0?.function?.name || '').toUpperCase().replace(/^DEFAULT_API:/, '');
       
       // If we see a dispatched command but haven't hit its result yet, it's blocked on user input!
-      if (APPROVAL_REQUIRED_TOOLS.has(toolName) && age > APPROVAL_PENDING_MS) {
-        const desc = extractToolDescription(tc0) || 'Command pending your approval';
+      // (We removed the APPROVAL_REQUIRED_TOOLS filter because depending on user settings, even read tools like VIEW_FILE might prompt for approval).
+      if (age > APPROVAL_PENDING_MS) {
+        const desc = extractToolDescription(tc0) || 'Action pending your approval';
         return { state: 'waiting', label: 'Waiting for You', description: desc };
       }
 
