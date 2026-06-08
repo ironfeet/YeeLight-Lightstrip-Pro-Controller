@@ -52,21 +52,26 @@
           <div id="screen-state-desc" class="state-desc">Sampling display every second</div>
         </div>
       </div>
-      <div id="screen-preview-wrap">
-        <div class="preview-swatch-row">
-          <div id="screen-color-preview" class="big-swatch"></div>
-          <div class="swatch-info">
-            <div id="screen-hex" class="hex-label">#——</div>
-            <div id="screen-rgb" class="rgb-label">rgb(—, —, —)</div>
-            <div id="screen-brightness" class="rgb-label">Brightness: —%</div>
-          </div>
+      <!-- Screenshot thumbnail — toggled by Show Preview -->
+      <div id="screen-capture-wrap">
+        <img id="screen-capture-img" alt="Screen capture preview" />
+      </div>
+
+      <!-- Color swatch always visible -->
+      <div class="preview-swatch-row">
+        <div id="screen-color-preview" class="big-swatch"></div>
+        <div class="swatch-info">
+          <div id="screen-hex" class="hex-label">#——</div>
+          <div id="screen-rgb" class="rgb-label">rgb(—, —, —)</div>
+          <div id="screen-brightness" class="rgb-label">Brightness: —%</div>
         </div>
       </div>
+
       <div class="controls">
         <label class="control-row control-row--toggle" for="screen-show-preview">
-          <span>Show Preview</span>
+          <span>Show Screen Preview</span>
           <div class="toggle-wrap">
-            <input type="checkbox" id="screen-show-preview" checked />
+            <input type="checkbox" id="screen-show-preview" />
             <span class="toggle-track"><span class="toggle-thumb"></span></span>
           </div>
         </label>

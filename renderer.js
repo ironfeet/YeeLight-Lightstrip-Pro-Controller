@@ -297,6 +297,12 @@ async function captureAndSend() {
     if (!frame) return;
 
     const img = new Image();
+    // Update the live preview image if visible
+    const previewImg = document.getElementById('screen-capture-img');
+    if (previewImg && document.getElementById('screen-show-preview').checked) {
+      previewImg.src = frame.dataURL;
+    }
+    
     img.onload = async () => {
       canvas.width  = img.width;
       canvas.height = img.height;
@@ -503,7 +509,7 @@ function bindEvents() {
   });
 
   document.getElementById('screen-show-preview').addEventListener('change', function () {
-    document.getElementById('screen-preview-wrap').classList.toggle('hidden', !this.checked);
+    document.getElementById('screen-capture-wrap').classList.toggle('visible', this.checked);
   });
 
   // Mode 2 interval
