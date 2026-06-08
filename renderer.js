@@ -136,18 +136,20 @@ let currentR = 255, currentG = 255, currentB = 255;
 function updateTrayIcon(r, g, b, isOn) {
   if (!window.electronAPI.updateTray) return;
   const canvas = document.createElement('canvas');
-  canvas.width = 16;
-  canvas.height = 16;
+  // Use a larger 22x22 canvas to maximize the space available in the macOS Menu Bar
+  canvas.width = 22;
+  canvas.height = 22;
   const ctx = canvas.getContext('2d');
   
-  ctx.clearRect(0, 0, 16, 16);
+  ctx.clearRect(0, 0, 22, 22);
   ctx.beginPath();
-  ctx.arc(8, 8, 6, 0, 2 * Math.PI);
+  // Draw a much larger circle (radius 10 means diameter 20, almost filling the 22px bar)
+  ctx.arc(11, 11, 10, 0, 2 * Math.PI);
   
   if (isOn) {
     ctx.fillStyle = `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
   } else {
     ctx.fillStyle = '#666';
     ctx.lineWidth = 1;
