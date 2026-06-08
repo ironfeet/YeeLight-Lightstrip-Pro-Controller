@@ -394,7 +394,7 @@ function classifyStatusFromLines(lines) {
     }
 
     if (t === 'USER_INPUT') break;
-    if (t === 'RUN_COMMAND') break;
+    if (t === 'RUN_COMMAND' && entry.status === 'DONE') break;
   }
 
   for (let i = recent.length - 1; i >= 0; i--) {
@@ -427,6 +427,9 @@ function classifyStatusFromLines(lines) {
 
     const state = toolNameToState(t);
     if (state && state !== 'waiting') {
+      if (entry.status && entry.status !== 'DONE' && entry.status !== 'ERROR') {
+        continue;
+      }
       const base = TOOL_LABELS[state];
       const prev = recent[i - 1];
       const prevTc = prev?.tool_calls?.[0];
