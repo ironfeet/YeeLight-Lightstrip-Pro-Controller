@@ -161,6 +161,8 @@ function updateTrayIcon(r, g, b, isOn) {
   window.electronAPI.updateTray(canvas.toDataURL('image/png'));
 }
 
+let lastSentR = -1, lastSentG = -1, lastSentB = -1, lastSentBright = -1;
+
 async function sendColor(r, g, b, scaleLuminance = false) {
   currentR = r; currentG = g; currentB = b;
   updateTrayIcon(r, g, b, lightOn);
@@ -177,8 +179,13 @@ async function sendColor(r, g, b, scaleLuminance = false) {
 
   if (!lightOn || !config.haToken) return targetBrightness;
 
-  const hash = `${r},${g},${b}-${targetBrightness}`;
-  if (hash === lastSentHash) return targetBrightness; // Debounce identical commands
+  // Utilize the colorThreshold setting to prevent network spam for microscopic color changes
+  const threshold = config.colorThreshold || 15;
+  const colorDiff = Math.abs(r - lastSentR) + Math.abs(g - lastSentG) + Math.abs(b - lastSentB);
+  
+  if (colorDiff < threshold && Math.abs(targetBrightness - lastSentBright) < 5) {
+    return targetBrightness; // Changes are below user threshold, debounce
+  }
 
   try {
     if (r === 0 && g === 0 && b === 0) {
@@ -186,7 +193,7 @@ async function sendColor(r, g, b, scaleLuminance = false) {
     } else {
       await getHA().setColor(r, g, b, targetBrightness);
     }
-    lastSentHash = hash;
+    lastSentR = r; lastSentG = g; lastSentB = b; lastSentBright = targetBrightness;
   } catch (e) {
     console.error('[HA] request failed (non-sensitive):', e.message);
   }
@@ -237,89 +244,49 @@ function hslToRgb(h, s, l) {
 }
 
 /**
- * Extract the most vibrant dominant color from ImageData.
- *
- * Algorithm:
- * 1. Sample pixels on a grid (skip near-gray, near-black, near-white).
- * 2. Bucket surviving pixels into 36 hue bins (10° each).
- * 3. Pick the heaviest hue bin (weighted by saturation).
- * 4. From that bin, compute the median hue and average saturation/lightness.
- * 5. Clamp saturation to a high value and lightness to a vibrant range,
- *    so the output is always punchy and visible on the light strip.
- * 6. Fall back to the overall most saturated pixel if all pixels are gray.
+ * Extract an Ambilight-style ambient color from the screen.
+ * Averages the entire screen to create a highly responsive ambient glow.
  */
 function extractVibrantColor(imageData, width, height) {
   const data = imageData.data;
-  const STEP = Math.max(1, Math.floor(Math.min(width, height) / 32)); // ~32×32 samples max
+  const STEP = Math.max(1, Math.floor(Math.min(width, height) / 32)); 
 
-  const HUE_BINS = 36; // 10° per bin
-  const bins = Array.from({ length: HUE_BINS }, () => ({ weight: 0, hues: [], sats: [], lights: [] }));
-
-  let bestSat = 0, bestSatPixel = null; // fallback
+  let sumR = 0, sumG = 0, sumB = 0;
+  let count = 0;
 
   for (let y = 0; y < height; y += STEP) {
     for (let x = 0; x < width; x += STEP) {
       const i = (y * width + x) * 4;
       const r = data[i], g = data[i + 1], b = data[i + 2];
+      
+      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+      // Skip pure black pixels (letterboxing in movies, etc)
+      if (luminance < 10) continue;
 
-      const [h, s, l] = rgbToHsl(r, g, b);
-
-      // Track the most saturated pixel for fallback
-      if (s > bestSat) { bestSat = s; bestSatPixel = [h, s, l]; }
-
-      // Skip near-black (too dark to see on strip)
-      if (l < 0.08) continue;
-      // Skip near-white (washed out)
-      if (l > 0.92) continue;
-      // Skip near-gray (no useful hue information)
-      if (s < 0.12) continue;
-
-      const bin = Math.floor(h * HUE_BINS) % HUE_BINS;
-      const w = s * s; // weight by saturation² — more vivid pixels dominate
-      bins[bin].weight += w;
-      bins[bin].hues.push(h);
-      bins[bin].sats.push(s);
-      bins[bin].lights.push(l);
+      // Weight brighter pixels more so the ambient light glows
+      const weight = 1 + (luminance / 255); 
+      
+      sumR += r * weight;
+      sumG += g * weight;
+      sumB += b * weight;
+      count += weight;
     }
   }
 
-  // Merge adjacent bins (wrap-around) so we don't split a single hue across boundary
-  const merged = bins.map((bin, i) => {
-    const prev = bins[(i - 1 + HUE_BINS) % HUE_BINS];
-    const next = bins[(i + 1) % HUE_BINS];
-    return {
-      weight: bin.weight + prev.weight * 0.3 + next.weight * 0.3,
-      hues:   [...bin.hues, ...prev.hues, ...next.hues],
-      sats:   [...bin.sats, ...prev.sats, ...next.sats],
-      lights: [...bin.lights, ...prev.lights, ...next.lights],
-    };
-  });
+  if (count === 0) return null;
 
-  const dominant = merged.reduce((best, b) => b.weight > best.weight ? b : best, merged[0]);
+  const avgR = sumR / count;
+  const avgG = sumG / count;
+  const avgB = sumB / count;
 
-  let h, s, l;
+  let [h, s, l] = rgbToHsl(avgR, avgG, avgB);
 
-  if (dominant.weight === 0 || dominant.hues.length === 0) {
-    // All pixels were gray — use the most saturated pixel we found
-    if (bestSatPixel) {
-      [h, s, l] = bestSatPixel;
-    } else {
-      return null; // truly featureless frame, leave light as-is
-    }
-  } else {
-    // Median of hue values (robust against outliers)
-    const sortedHues = [...dominant.hues].sort((a, b) => a - b);
-    h = sortedHues[Math.floor(sortedHues.length / 2)];
-
-    // Average saturation and lightness of the dominant bin
-    s = dominant.sats.reduce((a, v) => a + v, 0) / dominant.sats.length;
-    l = dominant.lights.reduce((a, v) => a + v, 0) / dominant.lights.length;
-  }
-
-  // ── Vibrance boost: push saturation and normalize lightness ──────────────
-  s = Math.min(1, s * (config.saturationBoost || 1.5));   // user-controlled boost
-  s = Math.max(0.65, s);   // floor: always at least 65% saturated
-  l = Math.max(0.38, Math.min(0.62, l)); // clamp to vibrant mid-range (not too dark, not washed out)
+  // Averaging inherently desaturates, so we boost saturation heavily
+  s = Math.min(1, s * (config.saturationBoost || 2.0)); 
+  s = Math.max(0.4, s); // Ensure it's not totally washed out
+  
+  // Keep lightness in a nice glowing range
+  l = Math.max(0.3, Math.min(0.7, l));
 
   return hslToRgb(h, s, l);
 }
