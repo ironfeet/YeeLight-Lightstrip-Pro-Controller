@@ -136,23 +136,23 @@ let currentR = 255, currentG = 255, currentB = 255;
 function updateTrayIcon(r, g, b, isOn) {
   if (!window.electronAPI.updateTray) return;
   const canvas = document.createElement('canvas');
-  // Use a 44x44 canvas for proper @2x Retina display rendering on macOS
-  canvas.width = 44;
-  canvas.height = 44;
+  // Revert to 22x22 canvas to prevent macOS from cropping the edges
+  canvas.width = 22;
+  canvas.height = 22;
   const ctx = canvas.getContext('2d');
   
-  ctx.clearRect(0, 0, 44, 44);
+  ctx.clearRect(0, 0, 22, 22);
   ctx.beginPath();
-  // Draw a large circle (radius 20 means diameter 40 out of 44)
-  ctx.arc(22, 22, 20, 0, 2 * Math.PI);
+  // Draw a circle with radius 9 (diameter 18) to leave a 2px safe margin
+  ctx.arc(11, 11, 9, 0, 2 * Math.PI);
   
   if (isOn) {
     ctx.fillStyle = `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
   } else {
     ctx.fillStyle = '#666';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 1;
     ctx.strokeStyle = '#333';
   }
   ctx.fill();
