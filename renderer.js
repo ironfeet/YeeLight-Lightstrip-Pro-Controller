@@ -162,6 +162,8 @@ function updateTrayIcon(r, g, b, isOn) {
 }
 
 let lastSentR = -1, lastSentG = -1, lastSentB = -1, lastSentBright = -1;
+let lastMeaningfulChangeTime = Date.now();
+let screenAutoOffTriggered = false;
 
 async function sendColor(r, g, b, scaleLuminance = false) {
   currentR = r; currentG = g; currentB = b;
@@ -184,8 +186,20 @@ async function sendColor(r, g, b, scaleLuminance = false) {
   const colorDiff = Math.abs(r - lastSentR) + Math.abs(g - lastSentG) + Math.abs(b - lastSentB);
   
   if (colorDiff < threshold && Math.abs(targetBrightness - lastSentBright) < 5) {
+    // Screen Mode Auto-Off: If the color hasn't changed meaningfully in 10 minutes, turn it off
+    if (currentMode === 'screen' && !screenAutoOffTriggered) {
+      if (Date.now() - lastMeaningfulChangeTime > 10 * 60 * 1000) {
+        screenAutoOffTriggered = true;
+        getHA().turnOff().catch(() => {});
+        console.log('[Mode1] 10 minute inactivity reached. Turning light off.');
+      }
+    }
     return targetBrightness; // Changes are below user threshold, debounce
   }
+
+  // A meaningful color change occurred! Wake up the light if it was auto-off'd.
+  lastMeaningfulChangeTime = Date.now();
+  screenAutoOffTriggered = false;
 
   try {
     if (r === 0 && g === 0 && b === 0) {
@@ -402,7 +416,9 @@ function stopMode3() {
 // ── Mode Switching ────────────────────────────────────────────────────────────
 function activateMode(mode) {
   currentMode = mode;
-  lastSentHash = ''; // force resend on mode switch
+  lastSentR = -1; // force resend on mode switch
+  lastMeaningfulChangeTime = Date.now(); // reset auto-off timer
+  screenAutoOffTriggered = false;
 
   // Tabs
   document.querySelectorAll('.tab').forEach(t => {
