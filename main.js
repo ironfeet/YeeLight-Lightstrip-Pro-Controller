@@ -271,10 +271,10 @@ function classifyStatus(brainDir) {
   let status = classifyStatusFromLines(lines);
 
   // HEURISTIC: If the last evaluated state is 'running' or 'researching', but the file
-  // hasn't been updated in over 10 seconds, the agent is either blocked waiting for user
-  // approval, or actively thinking/generating. Turn the light Amber to indicate this pending state.
-  if ((status.state === 'running' || status.state === 'researching' || status.state === 'coding') && ageMs > 10000) {
-    status = { state: 'waiting', label: 'Waiting / Busy', description: status.description + ' (Pending)' };
+  // hasn't been updated in over 30 seconds, the agent is either blocked waiting for user
+  // approval, or generating an unusually massive code block. Turn the light Amber.
+  if ((status.state === 'running' || status.state === 'researching' || status.state === 'coding') && ageMs > 30000) {
+    status = { state: 'waiting', label: 'Pending / Blocked', description: status.description + ' (Timeout)' };
   }
 
   // LOG STATE CHANGES TO DESKTOP SO USER CAN VERIFY APP'S INTERNAL EVALUATION
