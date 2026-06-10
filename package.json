@@ -5,13 +5,28 @@
   "main": "main.js",
   "scripts": {
     "start": "xattr -cr node_modules/electron/dist/Electron.app 2>/dev/null; node_modules/electron/dist/Electron.app/Contents/MacOS/Electron .",
-    "dev": "xattr -cr node_modules/electron/dist/Electron.app 2>/dev/null; node_modules/electron/dist/Electron.app/Contents/MacOS/Electron . --dev"
+    "dev": "xattr -cr node_modules/electron/dist/Electron.app 2>/dev/null; node_modules/electron/dist/Electron.app/Contents/MacOS/Electron . --dev",
+    "build:mac": "electron-builder --mac"
   },
   "keywords": [],
   "author": "Light Strip Pro",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^22.3.27"
+    "electron": "^22.3.27",
+    "electron-builder": "^26.15.2"
   },
-  "dependencies": {}
+  "build": {
+    "appId": "com.ironfeet.lightstrippro",
+    "productName": "Light Strip Pro",
+    "mac": {
+      "category": "public.app-category.utilities",
+      "icon": "icon.png",
+      "target": [
+        "zip"
+      ]
+    },
+    "directories": {
+      "output": "release"
+    }
+  }
 }
