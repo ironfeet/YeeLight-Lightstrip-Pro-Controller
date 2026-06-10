@@ -27,6 +27,8 @@ jobs:
 
       - name: Build macOS App
         run: npm run build:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract release notes
         id: extract_notes
