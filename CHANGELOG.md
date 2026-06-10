@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.2] - 11-06-2026
+
+### Changed
+- **Repository URL:** Updated the package metadata and Git remote configuration to reflect the official repository rename to `YeeLight-Lightstrip-Pro-Controller`.
+
+### Fixed
+- **CI/CD Release Pipeline:** Overhauled the GitHub Actions release workflow to allow `electron-builder` to natively publish releases without hijacking the release notes. The pipeline now safely injects the exact text from this `CHANGELOG.md` into the builder configuration.
+- **Release Status:** Configured `electron-builder` to immediately publish releases to the public, bypassing the native Draft mode behavior.
+- **CodeQL Quality Alert:** Removed legacy dead code (`APPROVAL_REQUIRED_TOOLS`) from `main.js` to resolve an unused local variable alert thrown by the CodeQL scanner.
+
+
 ## [0.0.1] - 11-06-2026
 
 ### Added
