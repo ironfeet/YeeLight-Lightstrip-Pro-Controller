@@ -351,11 +351,7 @@ const RECENCY_WINDOW_MS = 600_000;
 // If a PLANNER_RESPONSE+tool has been the last entry for >3s → approval pending.
 const APPROVAL_PENDING_MS = 3_000;
 
-// Tools that require explicit user approval before executing
-const APPROVAL_REQUIRED_TOOLS = new Set([
-  'RUN_COMMAND', 'UNSANDBOXED',
-  'WRITE_TO_FILE', 'REPLACE_FILE_CONTENT', 'MULTI_REPLACE_FILE_CONTENT'
-]);
+
 
 function classifyStatusFromLines(lines) {
   if (!lines.length) return { state: 'idle', label: 'Idle', description: 'No activity' };
