@@ -4,6 +4,16 @@ Light Strip Pro is a native macOS menu bar and desktop application built with El
 
 ![Light Strip Pro App Icon](icon.png)
 
+## Compatibility & Acknowledgements
+
+> [!IMPORTANT]
+> **This application has currently only been tested with the following specific hardware and software stack:**
+> * **Hardware**: Yeelight Strip Pro (bound to Mijia International).
+> * **Integration**: Integrated with [Home Assistant](https://www.home-assistant.io/) using the [Xiaomi Miot](https://github.com/al-one/hass-xiaomi-miot) integration.
+> * **Management**: Managed via [HACS](https://hacs.xyz/) (Home Assistant Community Store).
+>
+> A huge thank you to the creators and maintainers of [Home Assistant](https://www.home-assistant.io/), [HACS](https://hacs.xyz/), and the [hass-xiaomi-miot](https://github.com/al-one/hass-xiaomi-miot) project for making this integration possible!
+
 ## Features
 
 ### 🖥️ Dynamic Screen Mode (Ambilight)
@@ -65,14 +75,6 @@ Settings are securely saved to your local machine and automatically reloaded on 
 * `main.js`: The Electron main process. Manages the system tray, file I/O, IPC bridging, and parses the highly complex Antigravity transcript logs to determine accurate AI agent states.
 * `renderer.js`: The frontend logic. Handles UI interactions, the Screen Mode canvas/video capturing, Ambilight RGB calculations, and Home Assistant REST API communication.
 * `preload.js`: Secure context bridge between the Node environment and the web frontend.
-## Compatibility & Acknowledgements
-
-**Note:** This application has currently only been tested with the following specific hardware and software stack:
-* **Hardware**: Yeelight Strip Pro (bound to Mijia International).
-* **Integration**: Integrated with [Home Assistant](https://www.home-assistant.io/) using the [Xiaomi Miot](https://github.com/al-one/hass-xiaomi-miot) integration.
-* **Management**: Managed via [HACS](https://hacs.xyz/) (Home Assistant Community Store).
-
-A huge thank you to the creators and maintainers of [Home Assistant](https://www.home-assistant.io/), [HACS](https://hacs.xyz/), and the [hass-xiaomi-miot](https://github.com/al-one/hass-xiaomi-miot) project for making this integration possible!
 
 ## License
 
