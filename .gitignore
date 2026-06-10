@@ -4,3 +4,11 @@ node_modules/
 test-*.js
 live_log.txt
 app.log
+
+# Build artifacts
+release/
+dist/
+
+# Environment files
+.env
+.env.*
