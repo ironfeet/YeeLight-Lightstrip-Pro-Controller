@@ -18,6 +18,10 @@
   "build": {
     "appId": "me.ironfeet.com.yeelight-lightstrip-pro-controller",
     "productName": "YeeLight Lightstrip Pro Controller",
+    "publish": {
+      "provider": "github",
+      "releaseType": "release"
+    },
     "mac": {
       "category": "public.app-category.utilities",
       "icon": "icon.png",
