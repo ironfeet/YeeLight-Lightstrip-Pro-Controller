@@ -1,0 +1,44 @@
+name: Check macOS Build
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  build-check:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build macOS App
+        run: npm run build:mac
+
+      - name: Verify Build Generation
+        run: |
+          if [ -z "$(ls -A release/*.zip 2>/dev/null)" ]; then
+            echo "Error: macOS zip package was not generated successfully."
+            exit 1
+          else
+            echo "Success: macOS package generated successfully."
+            ls -lh release/
+          fi
