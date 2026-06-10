@@ -1,0 +1,41 @@
+name: Release YeeLight Lightstrip Pro Controller
+
+on:
+  push:
+    tags:
+      - 'v*' # Triggers workflow on tag pushes matching v* (e.g., v0.0.1, v1.0.0)
+
+permissions:
+  contents: write # Required for creating GitHub Releases
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build macOS App
+        run: npm run build:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract release notes
+        id: extract_notes
+        uses: ffurrer2/extract-release-notes@v2
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.zip
+          body: ${{ steps.extract_notes.outputs.release_notes }}

@@ -1,6 +1,6 @@
 {
-  "name": "light-strip-pro",
-  "version": "1.0.0",
+  "name": "yeelight-lightstrip-pro-controller",
+  "version": "0.0.1",
   "description": "Control your Yeelight strip based on screen color and Antigravity status",
   "main": "main.js",
   "scripts": {
@@ -16,8 +16,8 @@
     "electron-builder": "^26.15.2"
   },
   "build": {
-    "appId": "com.ironfeet.lightstrippro",
-    "productName": "Light Strip Pro",
+    "appId": "me.ironfeet.com.yeelight-lightstrip-pro-controller",
+    "productName": "YeeLight Lightstrip Pro Controller",
     "mac": {
       "category": "public.app-category.utilities",
       "icon": "icon.png",
