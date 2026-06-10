@@ -15,11 +15,17 @@ Transforms your workspace into an immersive environment.
 ### 🤖 AI Agent Sync Modes
 Ever wonder what your autonomous AI agents are doing in the background? Now your room will tell you.
 * **AI Agent Mode & IDE Agent Mode**: Syncs your physical light strip to the real-time processing state of the Antigravity engine.
-* **Smart State Detection**: Uses advanced log-parsing heuristics to determine if the agent is actively:
-  * 🔵 **Running / Researching** (Executing tools)
-  * 🟣 **Thinking** (Processing your input or generating code)
+* **Smart State Detection**: Uses advanced log-parsing heuristics to determine exactly what the agent is doing:
+  * 🔵 **Running** (Executing commands in the terminal)
+  * 🟢 **Coding** (Creating or modifying files)
+  * 🟦 **Researching** (Searching the web, grepping, or reading files)
+  * 🟣 **Thinking** (Processing your input or generating a response)
   * 🟠 **Pending / Blocked** (Waiting for your explicit permission/approval)
+  * 🟪 **Delegating** (Managing or communicating with subagents)
+  * 🩷 **Generating** (Creating AI images or media)
   * ⚪ **Idle** (Waiting for your next message)
+  * 🟤 **Inactive** (Agent has been idle for more than 5 minutes)
+  * ⚫ **Offline / Off** (Agent is not running or tracking is disabled)
 * **30-Second Heuristic**: Overcomes native IDE file-buffering quirks by intelligently separating long code generations from hard user-approval blocks.
 
 ### 🍏 Native macOS Polish
