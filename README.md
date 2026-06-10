@@ -1,8 +1,8 @@
-# Light Strip Pro
+# YeeLight Lightstrip Pro Controller
 
-Light Strip Pro is a native macOS menu bar and desktop application built with Electron. It seamlessly synchronizes your Home Assistant smart lights (like Yeelight light strips) with your on-screen activity and the real-time status of your Antigravity AI agents.
+YeeLight Lightstrip Pro Controller is a native macOS menu bar and desktop application built with Electron. It seamlessly synchronizes your Home Assistant smart lights (like Yeelight light strips) with your on-screen activity and the real-time status of your Antigravity AI agents.
 
-![Light Strip Pro App Icon](icon.png)
+![YeeLight Lightstrip Pro Controller App Icon](icon.png)
 
 ## Compatibility & Acknowledgements
 
@@ -40,7 +40,7 @@ Ever wonder what your autonomous AI agents are doing in the background? Now your
 
 ### 🍏 Native macOS Polish
 * **Retina Menu Bar Icon**: Features a custom-rendered, high-DPI (44x44 downsampled) menu bar status indicator that sits perfectly in your macOS menu bar without edge-clipping.
-* Click the menu bar dot to instantly summon the Light Strip Pro control panel.
+* Click the menu bar dot to instantly summon the YeeLight Lightstrip Pro Controller panel.
 
 ### 🎛️ Full Customization
 The built-in UI gives you granular control over the engine:
