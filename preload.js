@@ -24,4 +24,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimize: () => ipcRenderer.send('window-minimize'),
   close: () => ipcRenderer.send('window-close'),
   updateTray: (dataURL) => ipcRenderer.send('update-tray', dataURL),
+  updateModeState: (mode) => ipcRenderer.send('update-mode-state', mode),
+  onSetMode: (callback) => ipcRenderer.on('set-mode', callback),
 });
