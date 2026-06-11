@@ -4,6 +4,13 @@ YeeLight Lightstrip Pro Controller is a native macOS menu bar and desktop applic
 
 ![YeeLight Lightstrip Pro Controller App Icon](icon.png)
 
+## Screenshots
+<p align="center">
+  <img src="screenshots/screenshot-1.png" width="300" alt="App Screenshot 1">
+  <img src="screenshots/screenshot-2.png" width="300" alt="App Screenshot 2">
+  <img src="screenshots/screenshot-3.png" width="300" alt="App Screenshot 3">
+</p>
+
 ## Compatibility & Acknowledgements
 
 > [!IMPORTANT]
