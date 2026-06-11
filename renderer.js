@@ -419,6 +419,9 @@ function activateMode(mode) {
   lastSentR = -1; // force resend on mode switch
   lastMeaningfulChangeTime = Date.now(); // reset auto-off timer
   screenAutoOffTriggered = false;
+  
+  // Sync state back to the Tray Menu
+  window.electronAPI.updateModeState(mode);
 
   // Tabs
   document.querySelectorAll('.tab').forEach(t => {
@@ -495,9 +498,20 @@ function setSettingsStatus(msg, type = '') {
 
 // ── Event Listeners ───────────────────────────────────────────────────────────
 function bindEvents() {
-  // Mode tabs
-  document.querySelectorAll('.tab[data-mode]').forEach(tab => {
-    tab.addEventListener('click', () => activateMode(tab.dataset.mode));
+  // UI Tabs
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      activateMode(t.dataset.mode);
+      config.appMode = t.dataset.mode;
+      saveConfig();
+    });
+  });
+
+  // Tray Menu Sync
+  window.electronAPI.onSetMode((event, mode) => {
+    activateMode(mode);
+    config.appMode = mode;
+    saveConfig();
   });
 
   // Power toggle

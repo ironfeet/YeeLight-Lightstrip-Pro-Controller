@@ -116,12 +116,8 @@ app.whenReady().then(() => {
   // Create Menu Bar Tray Icon
   tray = new Tray(nativeImage.createEmpty());
   tray.setToolTip('Light Strip Pro');
-  const contextMenu = Menu.buildFromTemplate([
-    { label: 'Show App', click: () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } } },
-    { type: 'separator' },
-    { label: 'Quit', click: () => app.quit() }
-  ]);
-  tray.setContextMenu(contextMenu);
+  updateTrayMenu('screen');
+
   tray.on('click', () => {
     if (mainWindow) {
       mainWindow.isVisible() ? mainWindow.focus() : mainWindow.show();
@@ -132,6 +128,20 @@ app.whenReady().then(() => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+function updateTrayMenu(activeMode) {
+  if (!tray) return;
+  const contextMenu = Menu.buildFromTemplate([
+    { label: 'Show App', click: () => { if (mainWindow) { mainWindow.show(); mainWindow.focus(); } } },
+    { type: 'separator' },
+    { label: 'Dynamic Screen Mode', type: 'radio', checked: activeMode === 'screen', click: () => { if (mainWindow) mainWindow.webContents.send('set-mode', 'screen'); } },
+    { label: 'Antigravity AI Mode', type: 'radio', checked: activeMode === 'agent', click: () => { if (mainWindow) mainWindow.webContents.send('set-mode', 'agent'); } },
+    { label: 'Antigravity IDE Mode', type: 'radio', checked: activeMode === 'ide', click: () => { if (mainWindow) mainWindow.webContents.send('set-mode', 'ide'); } },
+    { type: 'separator' },
+    { label: 'Quit', click: () => app.quit() }
+  ]);
+  tray.setContextMenu(contextMenu);
+}
 
 app.on('window-all-closed', () => {
   app.quit();
@@ -149,6 +159,10 @@ ipcMain.on('update-tray', (event, dataURL) => {
   if (tray && dataURL) {
     tray.setImage(nativeImage.createFromDataURL(dataURL));
   }
+});
+
+ipcMain.on('update-mode-state', (event, mode) => {
+  updateTrayMenu(mode);
 });
 
 // ─── IPC: Mode 1 — Screen Capture ────────────────────────────────────────────

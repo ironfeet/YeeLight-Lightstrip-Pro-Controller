@@ -41,7 +41,8 @@ Ever wonder what your autonomous AI agents are doing in the background? Now your
 
 ### 🍏 Native macOS Polish
 * **Retina Menu Bar Icon**: Features a custom-rendered, high-DPI (44x44 downsampled) menu bar status indicator that sits perfectly in your macOS menu bar without edge-clipping.
-* Click the menu bar dot to instantly summon the YeeLight Lightstrip Pro Controller panel.
+* **Instant Mode Switching**: Right-click (or left-click) the menu bar dot to summon a native context menu, allowing you to instantly switch between Dynamic Screen Mode, AI Agent Mode, and IDE Mode without ever opening the main application window!
+* Click "Show App" from the context menu to instantly summon the full YeeLight Lightstrip Pro Controller configuration panel.
 
 ### 🎛️ Full Customization
 The built-in UI gives you granular control over the engine:

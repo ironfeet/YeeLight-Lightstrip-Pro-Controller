@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.3] - 11-06-2026
+
+### Added
+- **Menubar Mode Switching:** Added a dynamic context menu to the macOS Tray icon. You can now seamlessly switch between Dynamic Screen Mode, AI Agent Mode, and IDE Agent Mode directly from the menubar without opening the main application window.
+- **Bi-directional State Sync:** Built a robust IPC synchronization layer between the backend Tray menu and the frontend UI. Clicking a mode in the menubar instantly updates the UI tabs and config, and clicking a tab in the UI instantly updates the radio checkmarks in the menubar.
+
 ## [0.0.2] - 11-06-2026
 
 ### Changed
