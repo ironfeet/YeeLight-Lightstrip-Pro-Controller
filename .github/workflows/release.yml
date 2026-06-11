@@ -25,16 +25,18 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: Build macOS App
+        run: npm run build:mac -- --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Extract release notes
         id: extract_notes
         uses: ffurrer2/extract-release-notes@v2
 
-      - name: Write release notes to file
-        run: echo "$RELEASE_NOTES" > extracted_notes.txt
-        env:
-          RELEASE_NOTES: ${{ steps.extract_notes.outputs.release_notes }}
-
-      - name: Build and Publish macOS App
-        run: npm run build:mac -- --publish always -c.releaseInfo.releaseNotesFile="extracted_notes.txt"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.zip*
+          body: ${{ steps.extract_notes.outputs.release_notes }}
+          fail_on_unmatched_files: false

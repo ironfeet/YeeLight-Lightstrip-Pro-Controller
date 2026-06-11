@@ -8,9 +8,10 @@ All notable changes to this project will be documented in this file.
 - **Repository URL:** Updated the package metadata and Git remote configuration to reflect the official repository rename to `YeeLight-Lightstrip-Pro-Controller`.
 
 ### Fixed
-- **CI/CD Release Pipeline:** Overhauled the GitHub Actions release workflow to allow `electron-builder` to natively publish releases without hijacking the release notes. The pipeline now safely injects the exact text from this `CHANGELOG.md` into the builder configuration.
+- **CI/CD Release Pipeline:** Overhauled the GitHub Actions release workflow to use `softprops/action-gh-release`. This bypasses `electron-builder`'s internal publisher, guaranteeing that the standalone `.zip` app artifact is flawlessly uploaded every time alongside the correct release notes.
 - **Release Status:** Configured `electron-builder` to immediately publish releases to the public, bypassing the native Draft mode behavior.
 - **CodeQL Quality Alert:** Removed legacy dead code (`APPROVAL_REQUIRED_TOOLS`) from `main.js` to resolve an unused local variable alert thrown by the CodeQL scanner.
+- **Waiting Status Heuristic Bug:** Fixed a bug where the UI would falsely display "Waiting / Busy" during long, intensive code generation blocks. The heuristic timeout in the code has been properly synced to the intended 30 seconds.
 
 
 ## [0.0.1] - 11-06-2026

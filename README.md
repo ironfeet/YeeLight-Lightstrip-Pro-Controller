@@ -20,6 +20,7 @@ YeeLight Lightstrip Pro Controller is a native macOS menu bar and desktop applic
 Transforms your workspace into an immersive environment. 
 * Captures your screen in real-time and calculates a heavily optimized, highly responsive **weighted RGB average**.
 * Perfectly mimics the ambient glow of your screen—breathing and shifting organically with movie scenes, window movements, and scrolling webpages.
+* **Smooth Color Transitions**: Hardware commands are dispatched with a customized 100ms hardware fade transition for ultra-fluid color matching without jarring, instantaneous flashes.
 * **Energy Saving Auto-Off**: If the screen remains completely static for exactly 10 minutes (configurable via threshold), the app automatically turns off your light strip. The absolute second you move your mouse or change a tab, the light instantly wakes up and resumes its ambient glow!
 
 ### 🤖 AI Agent Sync Modes
