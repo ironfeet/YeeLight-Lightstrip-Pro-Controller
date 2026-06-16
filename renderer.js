@@ -94,17 +94,30 @@ function updateStatusPanel(prefix, status) {
   if (desc)  desc.textContent  = status.description;
 
   if (logsDiv && status.logs) {
-    // Only update if logs changed to avoid scrolling reset
-    const newHtml = status.logs.map(l => {
-      const parts = l.split('] ');
-      if (parts.length > 1) {
-        return `<div class="log-line"><span class="timestamp">${parts[0]}]</span> ${parts.slice(1).join('] ')}</div>`;
+    // Build a change-detection key without using innerHTML with user data.
+    const changeKey = status.logs.join('\n');
+    if (logsDiv.dataset.changeKey !== changeKey) {
+      logsDiv.dataset.changeKey = changeKey;
+      // Build DOM nodes safely using textContent — never innerHTML — so that
+      // user messages or tool summaries containing HTML characters cannot
+      // inject markup or execute scripts.
+      const fragment = document.createDocumentFragment();
+      for (const l of status.logs) {
+        const row = document.createElement('div');
+        row.className = 'log-line';
+        const parts = l.split('] ');
+        if (parts.length > 1) {
+          const ts = document.createElement('span');
+          ts.className = 'timestamp';
+          ts.textContent = parts[0] + ']';
+          row.appendChild(ts);
+          row.appendChild(document.createTextNode(' ' + parts.slice(1).join('] ')));
+        } else {
+          row.textContent = l;
+        }
+        fragment.appendChild(row);
       }
-      return `<div class="log-line">${l}</div>`;
-    }).join('');
-    
-    if (logsDiv.innerHTML !== newHtml) {
-      logsDiv.innerHTML = newHtml;
+      logsDiv.replaceChildren(fragment);
       logsDiv.scrollTop = logsDiv.scrollHeight;
     }
   }
