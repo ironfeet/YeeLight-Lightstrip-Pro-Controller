@@ -118,7 +118,7 @@ app.whenReady().then(() => {
   }
 
   // Load config before window creation so we can build the correct CSP.
-  const cfg = loadConfig();
+  loadConfig();
 
   // ── Dynamic CSP ──────────────────────────────────────────────────────────────
   // Build connect-src from the user's configured HA URL so no hardcoded IP
