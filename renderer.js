@@ -429,10 +429,10 @@ function stopMode3() {
 // ── Mode Switching ────────────────────────────────────────────────────────────
 function activateMode(mode) {
   currentMode = mode;
-  lastSentR = -1; // force resend on mode switch
+  lastSentR = -1; lastSentG = -1; lastSentB = -1; // force resend on mode switch
   lastMeaningfulChangeTime = Date.now(); // reset auto-off timer
   screenAutoOffTriggered = false;
-  
+
   // Sync state back to the Tray Menu
   window.electronAPI.updateModeState(mode);
 
@@ -450,15 +450,15 @@ function activateMode(mode) {
   const panel = document.getElementById(`panel-${mode}`);
   if (panel) panel.classList.add('active');
 
-  // Start/stop loops and force immediate UI/Light update
-  if (mode === 'screen') {
-    startMode1();
-  } else {
-    stopMode1();
-  }
+  // Stop all timers first, then start only the one for the active mode.
+  // This ensures at most one polling loop runs at any time.
+  stopMode1();
+  stopMode2();
+  stopMode3();
 
-  if (mode === 'agent') pollAgentStatus();
-  if (mode === 'ide') pollIDEStatus();
+  if (mode === 'screen') startMode1();
+  else if (mode === 'agent') startMode2();
+  else if (mode === 'ide') startMode3();
 }
 
 // ── Power Toggle ──────────────────────────────────────────────────────────────
@@ -631,12 +631,8 @@ async function init() {
   document.getElementById('brightness-pct').value = config.brightness || 80;
   document.getElementById('brightness-val').textContent = `${config.brightness || 80}%`;
 
-  // Always run status pollers in background
-  startMode2();
-  startMode3();
-
-  // Default to AI Agent mode — screen capture only starts if user clicks the Screen tab
-  activateMode('agent');
+  // activateMode handles starting the correct timer — no need to pre-start all modes.
+  activateMode(config.appMode || 'agent');
 }
 
 document.addEventListener('DOMContentLoaded', init);
