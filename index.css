@@ -329,6 +329,7 @@ html, body {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 6px 8px;
+  margin-top: auto;
 }
 .legend-item {
   display: flex;

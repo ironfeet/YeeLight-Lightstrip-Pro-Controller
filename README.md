@@ -57,6 +57,12 @@ The built-in UI gives you granular control over the engine:
 * **Performance Tuning**: Adjust screen capture intervals (ms) and status polling rates to save CPU.
 * **Vibrance & Thresholds**: Control the baseline brightness, apply a flat **Saturation Boost** to ensure the light strip remains punchy and colorful, and set a **Color Threshold** to prevent microscopic network spam.
 
+### 🛡️ Robustness & Security
+* **Secure by Default:** Zero `innerHTML` usage guarantees XSS protection, and a dynamic Content Security Policy (CSP) restricts network access strictly to your configured Home Assistant URL.
+* **Rock-Solid Stability:** Comprehensive null-pointer guards, IPC listener leak prevention, and isolated background polling timers ensure the app runs flawlessly for weeks without CPU or memory leaks.
+* **Uninterruptible Network Resilience:** All Home Assistant API calls are wrapped in strict `AbortController` timeouts, preventing your app from stalling or freezing when your local network or Home Assistant server drops out.
+* **Flawless UI Layout:** The UI flexbox has been heavily optimized with hard max-height bounds, guaranteeing that your controls, sliders, and legend never get pushed off-screen by massive AI agent logs.
+
 ## Installation
 
 1. Clone this repository.
