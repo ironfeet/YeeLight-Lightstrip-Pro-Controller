@@ -378,7 +378,7 @@ function stopMode1() {
 
 // ── Mode 2: Antigravity AI Agent ──────────────────────────────────────────────
 let mode2Timer = null;
-let mode2Interval = 300;
+let mode2Interval = 500; // matches the HTML slider default (value="500")
 
 async function pollAgentStatus() {
   try {
