@@ -564,15 +564,17 @@ function bindEvents() {
   // Mode 2 interval
   document.getElementById('agent-interval').addEventListener('input', function () {
     mode2Interval = parseInt(this.value);
+    config.mode2Interval = mode2Interval;
     document.getElementById('agent-interval-val').textContent = (mode2Interval / 1000).toFixed(1) + 's';
-    startMode2();
+    if (currentMode === 'agent') startMode2();
   });
 
   // Mode 3 interval
   document.getElementById('ide-interval').addEventListener('input', function () {
     mode3Interval = parseInt(this.value);
+    config.mode3Interval = mode3Interval;
     document.getElementById('ide-interval-val').textContent = (mode3Interval / 1000).toFixed(1) + 's';
-    startMode3();
+    if (currentMode === 'ide') startMode3();
   });
 
   // Settings: show/hide token
@@ -634,6 +636,14 @@ async function init() {
   document.getElementById('screen-threshold-val').textContent = config.colorThreshold || 15;
   document.getElementById('brightness-pct').value = config.brightness || 80;
   document.getElementById('brightness-val').textContent = `${config.brightness || 80}%`;
+
+  // Restore agent and IDE poll intervals from config
+  mode2Interval = config.mode2Interval || 500;
+  document.getElementById('agent-interval').value = mode2Interval;
+  document.getElementById('agent-interval-val').textContent = (mode2Interval / 1000).toFixed(1) + 's';
+  mode3Interval = config.mode3Interval || 1000;
+  document.getElementById('ide-interval').value = mode3Interval;
+  document.getElementById('ide-interval-val').textContent = (mode3Interval / 1000).toFixed(1) + 's';
 
   // activateMode handles starting the correct timer — no need to pre-start all modes.
   activateMode(config.appMode || 'agent');

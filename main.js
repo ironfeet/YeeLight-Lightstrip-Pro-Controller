@@ -32,11 +32,13 @@ const DEFAULT_CONFIG = {
   haUrl: 'http://192.168.31.179:8123',
   haToken: '',
   entityId: 'light.yeelink_strip8_3d99_light',
+  appMode: 'agent',
   mode1Interval: 1000,
+  mode2Interval: 500,
+  mode3Interval: 1000,
   brightness: 80,
   saturationBoost: 1.2,
   colorThreshold: 15,
-
 };
 
 let currentConfig = { ...DEFAULT_CONFIG };
