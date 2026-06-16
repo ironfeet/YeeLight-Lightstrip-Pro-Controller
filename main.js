@@ -111,6 +111,35 @@ app.whenReady().then(() => {
   if (process.platform === 'darwin') {
     app.dock.setIcon(path.join(__dirname, 'icon.png'));
   }
+
+  // Load config before window creation so we can build the correct CSP.
+  const cfg = loadConfig();
+
+  // ── Dynamic CSP ──────────────────────────────────────────────────────────────
+  // Build connect-src from the user's configured HA URL so no hardcoded IP
+  // ever blocks a user whose HA instance lives on a different address.
+  const { session } = require('electron');
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const haUrl = (currentConfig.haUrl || '').replace(/\/$/, '') || 'http://localhost:8123';
+    // Parse to origin (scheme + host + port) only — no path.
+    let haOrigin = haUrl;
+    try { haOrigin = new URL(haUrl).origin; } catch {}
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' https://fonts.googleapis.com",
+      "font-src https://fonts.gstatic.com",
+      "img-src 'self' data:",
+      `connect-src ${haOrigin}`,
+    ].join('; ');
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp],
+      },
+    });
+  });
+
   createWindow();
 
   // Create Menu Bar Tray Icon
