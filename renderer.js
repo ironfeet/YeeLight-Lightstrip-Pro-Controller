@@ -69,7 +69,6 @@ function getHA() {
 
 // ── Light state ───────────────────────────────────────────────────────────────
 let lightOn = true;
-let lastSentRgb = null;
 let currentMode = 'screen';
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
@@ -94,17 +93,30 @@ function updateStatusPanel(prefix, status) {
   if (desc)  desc.textContent  = status.description;
 
   if (logsDiv && status.logs) {
-    // Only update if logs changed to avoid scrolling reset
-    const newHtml = status.logs.map(l => {
-      const parts = l.split('] ');
-      if (parts.length > 1) {
-        return `<div class="log-line"><span class="timestamp">${parts[0]}]</span> ${parts.slice(1).join('] ')}</div>`;
+    // Build a change-detection key without using innerHTML with user data.
+    const changeKey = status.logs.join('\n');
+    if (logsDiv.dataset.changeKey !== changeKey) {
+      logsDiv.dataset.changeKey = changeKey;
+      // Build DOM nodes safely using textContent — never innerHTML — so that
+      // user messages or tool summaries containing HTML characters cannot
+      // inject markup or execute scripts.
+      const fragment = document.createDocumentFragment();
+      for (const l of status.logs) {
+        const row = document.createElement('div');
+        row.className = 'log-line';
+        const parts = l.split('] ');
+        if (parts.length > 1) {
+          const ts = document.createElement('span');
+          ts.className = 'timestamp';
+          ts.textContent = parts[0] + ']';
+          row.appendChild(ts);
+          row.appendChild(document.createTextNode(' ' + parts.slice(1).join('] ')));
+        } else {
+          row.textContent = l;
+        }
+        fragment.appendChild(row);
       }
-      return `<div class="log-line">${l}</div>`;
-    }).join('');
-    
-    if (logsDiv.innerHTML !== newHtml) {
-      logsDiv.innerHTML = newHtml;
+      logsDiv.replaceChildren(fragment);
       logsDiv.scrollTop = logsDiv.scrollHeight;
     }
   }
@@ -121,11 +133,11 @@ function updateStatusPanel(prefix, status) {
   }
 
   if (status.state === 'waiting') {
-    badge.classList.add('blinking');
-    block.classList.add('blinking');
+    if (badge) badge.classList.add('blinking');
+    if (block) block.classList.add('blinking');
   } else {
-    badge.classList.remove('blinking');
-    block.classList.remove('blinking');
+    if (badge) badge.classList.remove('blinking');
+    if (block) block.classList.remove('blinking');
   }
 }
 
@@ -197,9 +209,13 @@ async function sendColor(r, g, b, scaleLuminance = false) {
     return targetBrightness; // Changes are below user threshold, debounce
   }
 
-  // A meaningful color change occurred! Wake up the light if it was auto-off'd.
-  lastMeaningfulChangeTime = Date.now();
-  screenAutoOffTriggered = false;
+  // A meaningful color change occurred!
+  // Only track this for the screen auto-off timer — agent/IDE mode color
+  // changes must not reset the screen inactivity clock.
+  if (currentMode === 'screen') {
+    lastMeaningfulChangeTime = Date.now();
+    screenAutoOffTriggered = false;
+  }
 
   try {
     if (r === 0 && g === 0 && b === 0) {
@@ -361,7 +377,7 @@ function stopMode1() {
 
 // ── Mode 2: Antigravity AI Agent ──────────────────────────────────────────────
 let mode2Timer = null;
-let mode2Interval = 300;
+let mode2Interval = 500; // matches the HTML slider default (value="500")
 
 async function pollAgentStatus() {
   try {
@@ -416,10 +432,10 @@ function stopMode3() {
 // ── Mode Switching ────────────────────────────────────────────────────────────
 function activateMode(mode) {
   currentMode = mode;
-  lastSentR = -1; // force resend on mode switch
+  lastSentR = -1; lastSentG = -1; lastSentB = -1; // force resend on mode switch
   lastMeaningfulChangeTime = Date.now(); // reset auto-off timer
   screenAutoOffTriggered = false;
-  
+
   // Sync state back to the Tray Menu
   window.electronAPI.updateModeState(mode);
 
@@ -437,15 +453,15 @@ function activateMode(mode) {
   const panel = document.getElementById(`panel-${mode}`);
   if (panel) panel.classList.add('active');
 
-  // Start/stop loops and force immediate UI/Light update
-  if (mode === 'screen') {
-    startMode1();
-  } else {
-    stopMode1();
-  }
+  // Stop all timers first, then start only the one for the active mode.
+  // This ensures at most one polling loop runs at any time.
+  stopMode1();
+  stopMode2();
+  stopMode3();
 
-  if (mode === 'agent') pollAgentStatus();
-  if (mode === 'ide') pollIDEStatus();
+  if (mode === 'screen') startMode1();
+  else if (mode === 'agent') startMode2();
+  else if (mode === 'ide') startMode3();
 }
 
 // ── Power Toggle ──────────────────────────────────────────────────────────────
@@ -503,7 +519,7 @@ function bindEvents() {
     t.addEventListener('click', () => {
       activateMode(t.dataset.mode);
       config.appMode = t.dataset.mode;
-      saveConfig();
+      persistConfig();
     });
   });
 
@@ -511,7 +527,7 @@ function bindEvents() {
   window.electronAPI.onSetMode((event, mode) => {
     activateMode(mode);
     config.appMode = mode;
-    saveConfig();
+    persistConfig();
   });
 
   // Power toggle
@@ -547,15 +563,17 @@ function bindEvents() {
   // Mode 2 interval
   document.getElementById('agent-interval').addEventListener('input', function () {
     mode2Interval = parseInt(this.value);
+    config.mode2Interval = mode2Interval;
     document.getElementById('agent-interval-val').textContent = (mode2Interval / 1000).toFixed(1) + 's';
-    startMode2();
+    if (currentMode === 'agent') startMode2();
   });
 
   // Mode 3 interval
   document.getElementById('ide-interval').addEventListener('input', function () {
     mode3Interval = parseInt(this.value);
+    config.mode3Interval = mode3Interval;
     document.getElementById('ide-interval-val').textContent = (mode3Interval / 1000).toFixed(1) + 's';
-    startMode3();
+    if (currentMode === 'ide') startMode3();
   });
 
   // Settings: show/hide token
@@ -618,12 +636,16 @@ async function init() {
   document.getElementById('brightness-pct').value = config.brightness || 80;
   document.getElementById('brightness-val').textContent = `${config.brightness || 80}%`;
 
-  // Always run status pollers in background
-  startMode2();
-  startMode3();
+  // Restore agent and IDE poll intervals from config
+  mode2Interval = config.mode2Interval || 500;
+  document.getElementById('agent-interval').value = mode2Interval;
+  document.getElementById('agent-interval-val').textContent = (mode2Interval / 1000).toFixed(1) + 's';
+  mode3Interval = config.mode3Interval || 1000;
+  document.getElementById('ide-interval').value = mode3Interval;
+  document.getElementById('ide-interval-val').textContent = (mode3Interval / 1000).toFixed(1) + 's';
 
-  // Default to AI Agent mode — screen capture only starts if user clicks the Screen tab
-  activateMode('agent');
+  // activateMode handles starting the correct timer — no need to pre-start all modes.
+  activateMode(config.appMode || 'agent');
 }
 
 document.addEventListener('DOMContentLoaded', init);

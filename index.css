@@ -179,6 +179,8 @@ html, body {
 
 .panel-glass {
   flex: 1;
+  min-height: 0;           /* allow flex child to shrink below content size */
+  overflow: hidden;        /* prevent log growth from pushing legend/controls out */
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -327,6 +329,7 @@ html, body {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 6px 8px;
+  margin-top: auto;
 }
 .legend-item {
   display: flex;
@@ -571,6 +574,8 @@ input[type="range"]::-webkit-slider-thumb {
 /* ── Log Container (Mode 2 & 3) ───────────────────────────────────────────── */
 .log-container {
   flex: 1;
+  min-height: 60px;        /* always show at least a couple of lines */
+  max-height: 180px;       /* hard cap so legend and slider are never pushed out */
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 8px;

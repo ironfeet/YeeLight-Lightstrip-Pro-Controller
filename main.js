@@ -32,11 +32,13 @@ const DEFAULT_CONFIG = {
   haUrl: 'http://192.168.31.179:8123',
   haToken: '',
   entityId: 'light.yeelink_strip8_3d99_light',
+  appMode: 'agent',
   mode1Interval: 1000,
+  mode2Interval: 500,
+  mode3Interval: 1000,
   brightness: 80,
   saturationBoost: 1.2,
   colorThreshold: 15,
-
 };
 
 let currentConfig = { ...DEFAULT_CONFIG };
@@ -66,6 +68,9 @@ function saveConfig(config) {
       if (config[key] !== undefined) sanitized[key] = config[key];
     }
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(sanitized, null, 2), 'utf-8');
+    // Keep the in-memory config in sync so the dynamic CSP handler and any
+    // other main-process code always sees the latest values without a restart.
+    currentConfig = { ...currentConfig, ...sanitized };
     return true;
   } catch (e) {
     console.error('[Config] Save error (non-sensitive):', e.message);
@@ -111,6 +116,35 @@ app.whenReady().then(() => {
   if (process.platform === 'darwin') {
     app.dock.setIcon(path.join(__dirname, 'icon.png'));
   }
+
+  // Load config before window creation so we can build the correct CSP.
+  loadConfig();
+
+  // ── Dynamic CSP ──────────────────────────────────────────────────────────────
+  // Build connect-src from the user's configured HA URL so no hardcoded IP
+  // ever blocks a user whose HA instance lives on a different address.
+  const { session } = require('electron');
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const haUrl = (currentConfig.haUrl || '').replace(/\/$/, '') || 'http://localhost:8123';
+    // Parse to origin (scheme + host + port) only — no path.
+    let haOrigin = haUrl;
+    try { haOrigin = new URL(haUrl).origin; } catch {}
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' https://fonts.googleapis.com",
+      "font-src https://fonts.gstatic.com",
+      "img-src 'self' data:",
+      `connect-src ${haOrigin}`,
+    ].join('; ');
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp],
+      },
+    });
+  });
+
   createWindow();
 
   // Create Menu Bar Tray Icon
@@ -284,10 +318,11 @@ function classifyStatus(brainDir) {
 
   let status = classifyStatusFromLines(lines);
 
-  // HEURISTIC: If the last evaluated state is 'running' or 'researching', but the file
-  // hasn't been updated in over 30 seconds, the agent is either blocked waiting for user
-  // approval, or generating an unusually massive code block. Turn the light Amber.
-  if ((status.state === 'running' || status.state === 'researching' || status.state === 'coding') && ageMs > 30000) {
+  // HEURISTIC: If a RUN_COMMAND is the last entry and the file hasn't been
+  // updated in 30s, the user is likely staring at an approval dialog.
+  // We deliberately exclude 'coding' and 'researching' — large file writes
+  // and deep research passes can legitimately take several minutes.
+  if (status.state === 'running' && ageMs > APPROVAL_PENDING_MS) {
     status = { state: 'waiting', label: 'Pending / Blocked', description: status.description + ' (Timeout)' };
   }
 
@@ -360,12 +395,16 @@ function extractToolDescription(toolCall) {
 //      Once approved, RUN_COMMAND appears immediately.
 //   4. Active tools: use a 30s recency window on recent tool entries.
 const RECENCY_WINDOW_MS = 600_000;
-// How long a tool can be "dispatched but no result" before we assume it needs approval.
-// Auto-approved tools (view_file, grep_search, replace_file_content) complete in <2s.
-// If a PLANNER_RESPONSE+tool has been the last entry for >30s → approval pending.
+// Tools that require explicit user approval before they can execute.
+// ONLY these tools trigger the "Waiting" state after APPROVAL_PENDING_MS.
+// Auto-approved tools (write_to_file, view_file, grep_search, etc.) can run
+// for an arbitrarily long time and should never be classified as "Waiting".
+const APPROVAL_REQUIRED_TOOLS = new Set([
+  'RUN_COMMAND', 'UNSANDBOXED',
+]);
+// How long an APPROVAL-REQUIRED tool dispatch can sit without a result before
+// we assume the user is staring at the approval dialog.
 const APPROVAL_PENDING_MS = 30_000;
-
-
 
 function classifyStatusFromLines(lines) {
   if (!lines.length) return { state: 'idle', label: 'Idle', description: 'No activity' };
@@ -397,8 +436,10 @@ function classifyStatusFromLines(lines) {
            return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
         }
 
-        // If age > APPROVAL_PENDING_MS, it's blocked pending approval
-        if (age > APPROVAL_PENDING_MS) {
+        // Only apply the approval-pending timeout to tools that genuinely require
+        // user interaction. Auto-approved tools (coding, researching, etc.) can
+        // legitimately run for minutes and must NOT be classified as Waiting.
+        if (APPROVAL_REQUIRED_TOOLS.has(toolName) && age > APPROVAL_PENDING_MS) {
           const desc = extractToolDescription(tc0) || 'Action pending your approval';
           return { state: 'waiting', label: 'Waiting / Busy', description: desc };
         }

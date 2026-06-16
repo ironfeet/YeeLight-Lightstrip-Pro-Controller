@@ -8,6 +8,15 @@ All notable changes to this project will be documented in this file.
 - **Menubar Mode Switching:** Added a dynamic context menu to the macOS Tray icon. You can now seamlessly switch between Dynamic Screen Mode, AI Agent Mode, and IDE Agent Mode directly from the menubar without opening the main application window.
 - **Bi-directional State Sync:** Built a robust IPC synchronization layer between the backend Tray menu and the frontend UI. Clicking a mode in the menubar instantly updates the UI tabs and config, and clicking a tab in the UI instantly updates the radio checkmarks in the menubar.
 
+### Fixed & Improved
+- **App Stability:** Fixed several underlying issues that could cause the app to quietly crash or freeze in the background. The app is now rock-solid and optimized to run for weeks without memory leaks or heavy CPU usage.
+- **Enhanced Security:** Eliminated a potential security vulnerability in the log display, and updated the network policy so the app securely adapts to your specific Home Assistant address right out of the box.
+- **Layout Polish:** Fixed an issue where long AI agent logs would push the legend and interval sliders off the bottom of the screen. They now stay firmly anchored where they belong.
+- **Smarter Auto-Off:** The 10-minute screen inactivity auto-off timer is now perfectly isolated. Color changes triggered by Agent or IDE modes will no longer accidentally reset your screen timeout.
+- **Accurate "Waiting" State:** Fixed a bug where long operations (like writing a large file or doing deep research) would incorrectly show the agent as "Waiting". The waiting indicator now correctly appears *only* when an action genuinely requires your approval.
+- **Reliable Settings:** Fixed an issue where changing the agent poll interval sliders or switching the active tab wouldn't always save correctly. The app now reliably remembers your slider settings and your last active mode across restarts.
+- **Network Resilience:** Added automatic 5-second timeouts to all Home Assistant communications. If your Home Assistant server or Wi-Fi temporarily drops, the app will handle it gracefully instead of freezing.
+
 ## [0.0.2] - 11-06-2026
 
 ### Changed
