@@ -210,9 +210,13 @@ async function sendColor(r, g, b, scaleLuminance = false) {
     return targetBrightness; // Changes are below user threshold, debounce
   }
 
-  // A meaningful color change occurred! Wake up the light if it was auto-off'd.
-  lastMeaningfulChangeTime = Date.now();
-  screenAutoOffTriggered = false;
+  // A meaningful color change occurred!
+  // Only track this for the screen auto-off timer — agent/IDE mode color
+  // changes must not reset the screen inactivity clock.
+  if (currentMode === 'screen') {
+    lastMeaningfulChangeTime = Date.now();
+    screenAutoOffTriggered = false;
+  }
 
   try {
     if (r === 0 && g === 0 && b === 0) {
