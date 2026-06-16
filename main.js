@@ -318,10 +318,11 @@ function classifyStatus(brainDir) {
 
   let status = classifyStatusFromLines(lines);
 
-  // HEURISTIC: If the last evaluated state is 'running' or 'researching', but the file
-  // hasn't been updated in over 30 seconds, the agent is either blocked waiting for user
-  // approval, or generating an unusually massive code block. Turn the light Amber.
-  if ((status.state === 'running' || status.state === 'researching' || status.state === 'coding') && ageMs > 30000) {
+  // HEURISTIC: If a RUN_COMMAND is the last entry and the file hasn't been
+  // updated in 30s, the user is likely staring at an approval dialog.
+  // We deliberately exclude 'coding' and 'researching' — large file writes
+  // and deep research passes can legitimately take several minutes.
+  if (status.state === 'running' && ageMs > APPROVAL_PENDING_MS) {
     status = { state: 'waiting', label: 'Pending / Blocked', description: status.description + ' (Timeout)' };
   }
 
@@ -394,12 +395,16 @@ function extractToolDescription(toolCall) {
 //      Once approved, RUN_COMMAND appears immediately.
 //   4. Active tools: use a 30s recency window on recent tool entries.
 const RECENCY_WINDOW_MS = 600_000;
-// How long a tool can be "dispatched but no result" before we assume it needs approval.
-// Auto-approved tools (view_file, grep_search, replace_file_content) complete in <2s.
-// If a PLANNER_RESPONSE+tool has been the last entry for >30s → approval pending.
+// Tools that require explicit user approval before they can execute.
+// ONLY these tools trigger the "Waiting" state after APPROVAL_PENDING_MS.
+// Auto-approved tools (write_to_file, view_file, grep_search, etc.) can run
+// for an arbitrarily long time and should never be classified as "Waiting".
+const APPROVAL_REQUIRED_TOOLS = new Set([
+  'RUN_COMMAND', 'UNSANDBOXED',
+]);
+// How long an APPROVAL-REQUIRED tool dispatch can sit without a result before
+// we assume the user is staring at the approval dialog.
 const APPROVAL_PENDING_MS = 30_000;
-
-
 
 function classifyStatusFromLines(lines) {
   if (!lines.length) return { state: 'idle', label: 'Idle', description: 'No activity' };
@@ -431,8 +436,10 @@ function classifyStatusFromLines(lines) {
            return { state: 'waiting', label: 'Waiting for You', description: 'Action pending your approval' };
         }
 
-        // If age > APPROVAL_PENDING_MS, it's blocked pending approval
-        if (age > APPROVAL_PENDING_MS) {
+        // Only apply the approval-pending timeout to tools that genuinely require
+        // user interaction. Auto-approved tools (coding, researching, etc.) can
+        // legitimately run for minutes and must NOT be classified as Waiting.
+        if (APPROVAL_REQUIRED_TOOLS.has(toolName) && age > APPROVAL_PENDING_MS) {
           const desc = extractToolDescription(tc0) || 'Action pending your approval';
           return { state: 'waiting', label: 'Waiting / Busy', description: desc };
         }
