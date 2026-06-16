@@ -121,11 +121,11 @@ function updateStatusPanel(prefix, status) {
   }
 
   if (status.state === 'waiting') {
-    badge.classList.add('blinking');
-    block.classList.add('blinking');
+    if (badge) badge.classList.add('blinking');
+    if (block) block.classList.add('blinking');
   } else {
-    badge.classList.remove('blinking');
-    block.classList.remove('blinking');
+    if (badge) badge.classList.remove('blinking');
+    if (block) block.classList.remove('blinking');
   }
 }
 
