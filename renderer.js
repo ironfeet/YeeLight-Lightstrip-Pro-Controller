@@ -503,7 +503,7 @@ function bindEvents() {
     t.addEventListener('click', () => {
       activateMode(t.dataset.mode);
       config.appMode = t.dataset.mode;
-      saveConfig();
+      persistConfig();
     });
   });
 
@@ -511,7 +511,7 @@ function bindEvents() {
   window.electronAPI.onSetMode((event, mode) => {
     activateMode(mode);
     config.appMode = mode;
-    saveConfig();
+    persistConfig();
   });
 
   // Power toggle
