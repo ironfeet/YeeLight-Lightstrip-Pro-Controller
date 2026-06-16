@@ -25,5 +25,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   close: () => ipcRenderer.send('window-close'),
   updateTray: (dataURL) => ipcRenderer.send('update-tray', dataURL),
   updateModeState: (mode) => ipcRenderer.send('update-mode-state', mode),
-  onSetMode: (callback) => ipcRenderer.on('set-mode', callback),
+  onSetMode: (callback) => {
+    // Purge stale listeners before registering to prevent duplicates on page reload.
+    ipcRenderer.removeAllListeners('set-mode');
+    ipcRenderer.on('set-mode', callback);
+  },
+  offSetMode: () => ipcRenderer.removeAllListeners('set-mode'),
 });
