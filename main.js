@@ -68,6 +68,9 @@ function saveConfig(config) {
       if (config[key] !== undefined) sanitized[key] = config[key];
     }
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(sanitized, null, 2), 'utf-8');
+    // Keep the in-memory config in sync so the dynamic CSP handler and any
+    // other main-process code always sees the latest values without a restart.
+    currentConfig = { ...currentConfig, ...sanitized };
     return true;
   } catch (e) {
     console.error('[Config] Save error (non-sensitive):', e.message);

@@ -69,7 +69,6 @@ function getHA() {
 
 // ── Light state ───────────────────────────────────────────────────────────────
 let lightOn = true;
-let lastSentRgb = null;
 let currentMode = 'screen';
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
