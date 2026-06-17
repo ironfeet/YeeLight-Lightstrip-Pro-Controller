@@ -197,6 +197,7 @@ app.on('window-all-closed', () => {
 // ─── IPC: Config ─────────────────────────────────────────────────────────────
 ipcMain.handle('load-config', () => loadConfig());
 ipcMain.handle('save-config', (_event, config) => saveConfig(config));
+ipcMain.handle('get-app-version', () => app.getVersion());
 
 ipcMain.handle('ha-request', async (event, url, options, timeoutMs) => {
   return new Promise((resolve) => {

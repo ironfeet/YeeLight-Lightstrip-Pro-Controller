@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Config
   loadConfig: () => ipcRenderer.invoke('load-config'),
   saveConfig: (config) => ipcRenderer.invoke('save-config', config),
+  haRequest: (url, options, timeoutMs) => ipcRenderer.invoke('ha-request', url, options, timeoutMs),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
   // Mode 1: Screen capture
   captureScreen: () => ipcRenderer.invoke('capture-screen'),
