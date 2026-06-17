@@ -6,7 +6,7 @@
   <!-- CSP is set dynamically by main.js (session.webRequest) based on the
        user's configured HA URL. This meta tag is a strict fallback only. -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';" />
+        content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:;" />
   <title>YeeLight Lightstrip Pro Controller</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -17,6 +17,11 @@
   <!-- Drag region for frameless window -->
   <div id="titlebar">
     <span id="app-title">YeeLight Lightstrip Pro Controller</span>
+  </div>
+
+  <!-- Global Connection Error Banner -->
+  <div id="connection-error" class="hidden">
+    ⚠️ Cannot connect to Home Assistant. Check your settings.
   </div>
 
   <!-- Live colour preview strip -->

@@ -224,8 +224,14 @@ async function sendColor(r, g, b, scaleLuminance = false) {
       await getHA().setColor(r, g, b, targetBrightness);
     }
     lastSentR = r; lastSentG = g; lastSentB = b; lastSentBright = targetBrightness;
+    
+    // Clear connection error if it was showing
+    const errBanner = document.getElementById('connection-error');
+    if (errBanner) errBanner.classList.add('hidden');
   } catch (e) {
     console.error('[HA] request failed (non-sensitive):', e.message);
+    const errBanner = document.getElementById('connection-error');
+    if (errBanner) errBanner.classList.remove('hidden');
   }
 
   return targetBrightness;
