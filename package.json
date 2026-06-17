@@ -1,6 +1,6 @@
 {
   "name": "yeelight-lightstrip-pro-controller",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Control your Yeelight strip based on screen color and Antigravity status",
   "main": "main.js",
   "scripts": {
@@ -16,7 +16,7 @@
     "url": "https://github.com/ironfeet/YeeLight-Lightstrip-Pro-Controller.git"
   },
   "devDependencies": {
-    "electron": "^22.3.27",
+    "electron": "^41.7.1",
     "electron-builder": "^26.15.2"
   },
   "build": {

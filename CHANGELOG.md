@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.4] - 17-06-2026
+
+### Added
+- **Connection Error Warnings:** Added a sleek new warning banner that gracefully slides down from the top of the app to let you know if the connection to Home Assistant is lost (like during a Wi-Fi drop or server restart). It automatically disappears the moment the connection is back!
+
+### Fixed
+- **Reliable Home Assistant Connections:** Fixed a strict browser security issue that was secretly blocking the app from talking to Home Assistant out of the box. The app now uses a smarter, dedicated internal connection method, guaranteeing it works flawlessly on any setup without compromising your security.
+
 ## [0.0.3] - 11-06-2026
 
 ### Added

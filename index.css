@@ -58,6 +58,29 @@ html, body {
   letter-spacing: 0.04em;
 }
 
+#connection-error {
+  position: absolute;
+  top: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(220, 38, 38, 0.95);
+  color: #fff;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+#connection-error.hidden {
+  opacity: 0;
+  transform: translate(-50%, -10px);
+}
+
 /* ── Colour Strip ─────────────────────────────────────────────────────────── */
 #color-strip {
   position: relative;
