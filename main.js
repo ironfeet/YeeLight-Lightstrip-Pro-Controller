@@ -8,7 +8,7 @@
  *   - No user input passed to shell or file paths
  */
 
-const { app, BrowserWindow, ipcMain, desktopCapturer, screen, Tray, nativeImage, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, screen, Tray, nativeImage, Menu, net } = require('electron');
 const path = require('path');
 
 const fs = require('fs');
@@ -26,7 +26,7 @@ app.commandLine.appendSwitch('disable-software-rasterizer');
 
 
 // ─── Config ──────────────────────────────────────────────────────────────────
-const CONFIG_PATH = path.join(os.homedir(), '.gemini', 'antigravity', 'lightstrip-config.json');
+const CONFIG_PATH = path.join(os.homedir(), '.yeelight-lightstrip-pro-controller', 'lightstrip-config.json');
 
 const DEFAULT_CONFIG = {
   haUrl: 'http://192.168.31.179:8123',
@@ -117,6 +117,19 @@ app.whenReady().then(() => {
     app.dock.setIcon(path.join(__dirname, 'icon.png'));
   }
 
+  // Legacy config migration
+  const oldConfigPath = path.join(os.homedir(), '.gemini', 'antigravity', 'lightstrip-config.json');
+  if (fs.existsSync(oldConfigPath) && !fs.existsSync(CONFIG_PATH)) {
+    try {
+      const newDir = path.dirname(CONFIG_PATH);
+      if (!fs.existsSync(newDir)) fs.mkdirSync(newDir, { recursive: true });
+      fs.copyFileSync(oldConfigPath, CONFIG_PATH);
+      console.log('Migrated legacy config to new path.');
+    } catch (e) {
+      console.error('Config migration failed:', e.message);
+    }
+  }
+
   // Load config before window creation so we can build the correct CSP.
   loadConfig();
 
@@ -135,7 +148,7 @@ app.whenReady().then(() => {
       "style-src 'self' https://fonts.googleapis.com",
       "font-src https://fonts.gstatic.com",
       "img-src 'self' data:",
-      `connect-src ${haOrigin}`,
+      `connect-src 'self' ${haOrigin}`,
     ].join('; ');
     callback({
       responseHeaders: {
@@ -184,6 +197,55 @@ app.on('window-all-closed', () => {
 // ─── IPC: Config ─────────────────────────────────────────────────────────────
 ipcMain.handle('load-config', () => loadConfig());
 ipcMain.handle('save-config', (_event, config) => saveConfig(config));
+
+ipcMain.handle('ha-request', async (event, url, options, timeoutMs) => {
+  return new Promise((resolve) => {
+    const req = net.request({
+      method: options.method || 'GET',
+      url: url,
+    });
+
+    if (options.headers) {
+      for (const [k, v] of Object.entries(options.headers)) {
+        req.setHeader(k, v);
+      }
+    }
+
+    let isResolved = false;
+    const finish = (result) => {
+      if (isResolved) return;
+      isResolved = true;
+      resolve(result);
+    };
+
+    const timer = setTimeout(() => {
+      req.abort();
+      finish({ ok: false, status: 0, error: 'Timeout' });
+    }, timeoutMs || 5000);
+
+    req.on('response', (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        clearTimeout(timer);
+        try {
+          const parsed = JSON.parse(data);
+          finish({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, data: parsed });
+        } catch (e) {
+          finish({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, data: data });
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      clearTimeout(timer);
+      finish({ ok: false, status: 0, error: err.message });
+    });
+
+    if (options.body) req.write(options.body);
+    req.end();
+  });
+});
 
 // ─── IPC: Window & Tray Controls ──────────────────────────────────────────────
 ipcMain.on('window-minimize', () => mainWindow?.minimize());
