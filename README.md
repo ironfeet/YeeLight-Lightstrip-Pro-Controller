@@ -86,7 +86,7 @@ Upon launching the app for the first time, navigate to the **Settings** tab. You
 2. A Long-Lived Access Token generated from your Home Assistant user profile.
 3. The Entity ID of the light you wish to control (e.g., `light.my_desk_strip`).
 
-Settings are securely saved to your local machine and automatically reloaded on launch.
+Settings are securely saved to your local machine at `~/.yeelight-lightstrip-pro-controller/lightstrip-config.json` and automatically reloaded on launch.
 
 ## Architecture
 

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.6] - 17-06-2026
+
+### Changed
+- **App Data Directory:** Moved the underlying configuration save path to an officially branded application directory: `~/.yeelight-lightstrip-pro-controller/lightstrip-config.json`.
+- **Seamless Data Migration:** Implemented a silent startup check that automatically imports your Home Assistant tokens and UI settings from the old legacy folder into the new official directory, ensuring zero setup loss.
+
 ## [0.0.5] - 17-06-2026
 
 ### Security
