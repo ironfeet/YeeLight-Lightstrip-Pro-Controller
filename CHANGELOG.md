@@ -4,9 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [0.0.6] - 17-06-2026
 
+### Added
+- **Update Checker:** You can now see your current app version and instantly check for new updates directly from the Settings tab! The app is smart enough to ensure you only get notified when a genuinely newer version is available.
+
 ### Changed
-- **App Data Directory:** Moved the underlying configuration save path to an officially branded application directory: `~/.yeelight-lightstrip-pro-controller/lightstrip-config.json`.
-- **Seamless Data Migration:** Implemented a silent startup check that automatically imports your Home Assistant tokens and UI settings from the old legacy folder into the new official directory, ensuring zero setup loss.
+- **Cleaner Settings Storage:** The app now saves its settings into its own dedicated `~/.yeelight-lightstrip-pro-controller` folder.
+- **Auto-Migration:** Don't worry about losing your setup! The next time you open the app, it will automatically find your old settings and seamlessly move them to the new folder without you having to do a thing.
 
 ## [0.0.5] - 17-06-2026
 
