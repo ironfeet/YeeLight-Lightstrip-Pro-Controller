@@ -60,6 +60,7 @@ The built-in UI gives you granular control over the engine:
 ### 🛡️ Robustness & Security
 * **Secure by Default:** Zero `innerHTML` usage guarantees XSS protection, and a dynamic Content Security Policy (CSP) restricts frontend resources.
 * **CORS-Bypass IPC Proxy:** All Home Assistant API calls are routed securely through an internal Node.js IPC proxy. This entirely bypasses Chromium's strict CORS enforcement, guaranteeing flawless network connectivity without having to disable `webSecurity`.
+* **Modern & Hardened Engine:** Built on the ultra-modern Electron v41 architecture, the app enjoys a fully patched, zero-vulnerability runtime environment.
 * **Global Error Awareness:** If the app ever loses connection to Home Assistant, a beautiful, non-intrusive floating error pill automatically slides down from the titlebar to warn you, and seamlessly hides itself once the connection is restored.
 * **Rock-Solid Stability:** Comprehensive null-pointer guards, IPC listener leak prevention, and isolated background polling timers ensure the app runs flawlessly for weeks without CPU or memory leaks.
 * **Uninterruptible Network Resilience:** All backend API calls are wrapped in strict 5-second timeouts, preventing your app from stalling or freezing when your local network or Home Assistant server drops out.

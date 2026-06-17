@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.5] - 17-06-2026
+
+### Security
+- **Major Engine Upgrade:** Upgraded the core Electron engine from v22 all the way to v41.7.1! This massive leap addresses 18 separate high-to-moderate security vulnerabilities reported by GitHub Dependabot (including fixes for Heap Buffer Overflows, ASAR Integrity Bypasses, and IPC spoofing).
+- **Hardened Dependencies:** Safely patched and modernized all underlying transitive packages to ensure zero vulnerabilities remain.
+
 ## [0.0.4] - 17-06-2026
 
 ### Added
