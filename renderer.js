@@ -622,6 +622,50 @@ function bindEvents() {
     setSettingsStatus('Settings saved', 'ok');
     setTimeout(() => setSettingsStatus(''), 2000);
   });
+
+  // Check for updates
+  document.getElementById('btn-check-update').addEventListener('click', async () => {
+    const statusEl = document.getElementById('update-status');
+    statusEl.textContent = 'Checking GitHub...';
+    statusEl.style.color = 'var(--text-dim)';
+    try {
+      const res = await window.electronAPI.haRequest(
+        'https://api.github.com/repos/ironfeet/YeeLight-Lightstrip-Pro-Controller/releases/latest',
+        { headers: { 'User-Agent': 'YeeLight-Controller' } },
+        5000
+      );
+      if (res && res.ok && res.data && res.data.tag_name) {
+        const currentVersion = await window.electronAPI.getAppVersion();
+        const latestVersion = res.data.tag_name.replace(/^v/, '');
+        
+        const isNewerVersion = (v1, v2) => {
+          const p1 = v1.split('.').map(Number);
+          const p2 = v2.split('.').map(Number);
+          for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+            const n1 = p1[i] || 0;
+            const n2 = p2[i] || 0;
+            if (n1 > n2) return true;
+            if (n1 < n2) return false;
+          }
+          return false;
+        };
+
+        if (isNewerVersion(latestVersion, currentVersion)) {
+          statusEl.textContent = `New update available! (v${latestVersion})`;
+          statusEl.style.color = 'var(--status-ok)';
+        } else {
+          statusEl.textContent = 'You are on the latest version!';
+          statusEl.style.color = 'var(--text-dim)';
+        }
+      } else {
+        statusEl.textContent = 'Failed to fetch releases';
+        statusEl.style.color = 'var(--status-err)';
+      }
+    } catch (e) {
+      statusEl.textContent = 'Error checking for updates';
+      statusEl.style.color = 'var(--status-err)';
+    }
+  });
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -629,6 +673,9 @@ async function init() {
   await loadConfig();
   populateSettings();
   bindEvents();
+
+  const appVersion = await window.electronAPI.getAppVersion();
+  document.getElementById('app-version-label').textContent = `Version v${appVersion}`;
 
   // Sync slider UI values from config
   document.getElementById('screen-interval').value = config.mode1Interval || 1000;
