@@ -56,6 +56,7 @@ The built-in UI gives you granular control over the engine:
 * **Home Assistant Integration**: Input your HA URL, Long-Lived Access Token, and Target Entity ID.
 * **Performance Tuning**: Adjust screen capture intervals (ms) and status polling rates to save CPU.
 * **Vibrance & Thresholds**: Control the baseline brightness, apply a flat **Saturation Boost** to ensure the light strip remains punchy and colorful, and set a **Color Threshold** to prevent microscopic network spam.
+* **In-App Updater:** Instantly check for new GitHub releases directly from the Settings panel without needing to leave the app.
 
 ### 🛡️ Robustness & Security
 * **Secure by Default:** Zero `innerHTML` usage guarantees XSS protection, and a dynamic Content Security Policy (CSP) restricts frontend resources.

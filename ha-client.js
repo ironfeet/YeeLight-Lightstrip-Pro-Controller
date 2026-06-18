@@ -19,22 +19,21 @@ class HAClient {
     };
   }
 
-  // Wraps fetch with an AbortController timeout so a dead/unreachable HA
-  // server can never stall the renderer for the browser's default timeout
-  // (which can be several minutes and causes IPC call backlog).
-  _fetch(url, options = {}) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    return fetch(url, { ...options, signal: controller.signal })
-      .finally(() => clearTimeout(timer));
+  // Wraps the request via IPC to the main process so we bypass the strict CORS
+  // enforcement of webSecurity: true, since HA APIs do not emit CORS headers.
+  async _fetch(url, options = {}) {
+    if (!window.electronAPI || !window.electronAPI.haRequest) {
+      throw new Error('IPC proxy haRequest not available');
+    }
+    return window.electronAPI.haRequest(url, options, this.timeoutMs);
   }
 
   async getState() {
     const res = await this._fetch(`${this.haUrl}/api/states/${this.entityId}`, {
       headers: this._headers(),
     });
-    if (!res.ok) throw new Error(`HA getState failed: ${res.status}`);
-    return res.json();
+    if (!res.ok) throw new Error(`HA getState failed: ${res.status} ${res.error || ''}`);
+    return res.data;
   }
 
   async setColor(r, g, b, brightness = 80) {
@@ -50,7 +49,7 @@ class HAClient {
         transition: 0.1,
       }),
     });
-    if (!res.ok) throw new Error(`HA setColor failed: ${res.status}`);
+    if (!res.ok) throw new Error(`HA setColor failed: ${res.status} ${res.error || ''}`);
     return true;
   }
 
@@ -60,7 +59,7 @@ class HAClient {
       headers: this._headers(),
       body: JSON.stringify({ entity_id: this.entityId }),
     });
-    if (!res.ok) throw new Error(`HA turnOn failed: ${res.status}`);
+    if (!res.ok) throw new Error(`HA turnOn failed: ${res.status} ${res.error || ''}`);
     return true;
   }
 
@@ -70,7 +69,7 @@ class HAClient {
       headers: this._headers(),
       body: JSON.stringify({ entity_id: this.entityId }),
     });
-    if (!res.ok) throw new Error(`HA turnOff failed: ${res.status}`);
+    if (!res.ok) throw new Error(`HA turnOff failed: ${res.status} ${res.error || ''}`);
     return true;
   }
 }

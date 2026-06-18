@@ -4,6 +4,7 @@ node_modules/
 test-*.js
 live_log.txt
 app.log
+agent_status_log.txt
 
 # Build artifacts
 release/
