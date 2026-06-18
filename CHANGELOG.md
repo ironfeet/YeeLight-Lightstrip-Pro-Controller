@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.7] - 18-06-2026
+
+### Fixed
+- **Rock-Solid Connections:** Completely eliminated the possibility of strict browser CORS policies blocking your connection to Home Assistant. The app now routes all network calls through a secure native backend proxy, ensuring your commands always go through flawlessly.
+
 ## [0.0.6] - 17-06-2026
 
 ### Added
@@ -10,7 +15,6 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **Cleaner Settings Storage:** The app now saves its settings into its own dedicated `~/.yeelight-lightstrip-pro-controller` folder.
 - **Auto-Migration:** Don't worry about losing your setup! The next time you open the app, it will automatically find your old settings and seamlessly move them to the new folder without you having to do a thing.
-
 ## [0.0.5] - 17-06-2026
 
 ### Security
