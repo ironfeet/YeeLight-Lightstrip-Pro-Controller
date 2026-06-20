@@ -91,8 +91,9 @@ Settings are securely saved to your local machine at `~/.yeelight-lightstrip-pro
 
 ## Architecture
 
-* `main.js`: The Electron main process. Manages the system tray, file I/O, IPC bridging, and parses the highly complex Antigravity transcript logs to determine accurate AI agent states.
-* `renderer.js`: The frontend logic. Handles UI interactions, the Screen Mode canvas/video capturing, Ambilight RGB calculations, and Home Assistant REST API communication.
+* `main.js`: The Electron main process. Manages the system tray, file I/O, IPC bridging, and parses the highly complex Antigravity transcript logs (dynamically scanning both legacy and `antigravity-cli` locations) to determine accurate AI agent states.
+* `renderer.js`: The frontend logic. Handles UI interactions, the Screen Mode canvas/video capturing, and Ambilight RGB calculations.
+* `ha-client.js`: A robust wrapper for Home Assistant REST API communication. It routes all API calls through the secure IPC backend proxy to effortlessly bypass strict browser CORS policies.
 * `preload.js`: Secure context bridge between the Node environment and the web frontend.
 
 ## License
