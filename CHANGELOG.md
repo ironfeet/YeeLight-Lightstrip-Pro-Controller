@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.8] - 20-06-2026
+
+### Fixed
+- **CLI Sync Fix:** Fixed an issue where the app would stay "Offline" or "Idle" when running the Antigravity CLI. The app now dynamically scans both the legacy and new `antigravity-cli` directories to instantly lock onto your active agent session.
+- **Hardware Color Flash:** Fixed a bug where toggling the Power button to ON while the agent was idle/off would cause the light strip to briefly flash its previous hardware color (usually the color from Screen Mode) before turning off. The app now immediately pushes the clean internal state to the hardware, bypassing its memory.
+
 ## [0.0.7] - 18-06-2026
 
 ### Fixed

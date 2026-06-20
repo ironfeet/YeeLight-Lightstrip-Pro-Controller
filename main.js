@@ -556,9 +556,23 @@ function classifyStatusFromLines(lines) {
 
 
 // ─── IPC: Mode 2 — Antigravity App Agent Status ──────────────────────────────
-const AG_BRAIN_DIR = path.join(os.homedir(), '.gemini', 'antigravity', 'brain');
+const AG_BRAIN_DIRS = [
+  path.join(os.homedir(), '.gemini', 'antigravity-cli', 'brain'),
+  path.join(os.homedir(), '.gemini', 'antigravity', 'brain')
+];
 
-ipcMain.handle('get-agent-status', () => classifyStatus(AG_BRAIN_DIR));
+ipcMain.handle('get-agent-status', () => {
+  let newestDir = AG_BRAIN_DIRS[0];
+  let newestTime = 0;
+  for (const dir of AG_BRAIN_DIRS) {
+    const t = findMostRecentTranscript(dir);
+    if (t && t.mtime > newestTime) {
+      newestTime = t.mtime;
+      newestDir = dir;
+    }
+  }
+  return classifyStatus(newestDir);
+});
 
 // ─── IPC: Mode 3 — Antigravity IDE Agent Status ───────────────────────────────
 const IDE_BRAIN_DIR = path.join(os.homedir(), '.gemini', 'antigravity-ide', 'brain');

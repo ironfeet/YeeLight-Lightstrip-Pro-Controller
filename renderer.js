@@ -480,8 +480,14 @@ function setLightOn(on) {
   toggle.setAttribute('aria-checked', String(on));
   label.textContent = on ? 'ON' : 'OFF';
 
+  // Force cache invalidation so the next sendColor always pushes hardware state
+  lastSentR = -1; lastSentG = -1; lastSentB = -1;
+
   if (on) {
-    getHA().turnOn().catch(() => {});
+    // Push the current internally tracked color immediately.
+    // If the state is 'off', this safely re-triggers getHA().turnOff() 
+    // rather than flashing the hardware's last known color via turnOn().
+    sendColor(currentR, currentG, currentB);
   } else {
     getHA().turnOff().catch(() => {});
   }
