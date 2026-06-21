@@ -200,11 +200,32 @@ ipcMain.handle('save-config', (_event, config) => saveConfig(config));
 ipcMain.handle('get-app-version', () => app.getVersion());
 
 ipcMain.handle('ha-request', async (event, url, options, timeoutMs) => {
+  // ── Security: prevent SSRF by validating the URL against a strict allowlist ──
+  // Only the user-configured HA origin and the GitHub API are permitted.
+  const ALLOWED_ORIGINS = new Set(['https://api.github.com']);
+  const haOrigin = (() => {
+    try { return new URL(currentConfig.haUrl || '').origin; } catch { return null; }
+  })();
+  if (haOrigin) ALLOWED_ORIGINS.add(haOrigin);
+
+  let reqOrigin;
+  try { reqOrigin = new URL(url).origin; } catch {
+    return { ok: false, status: 0, error: 'Invalid URL' };
+  }
+  if (!ALLOWED_ORIGINS.has(reqOrigin)) {
+    console.error('[ha-request] Blocked request to disallowed origin:', reqOrigin);
+    return { ok: false, status: 0, error: 'Disallowed origin' };
+  }
+
+  // Whitelist HTTP methods to prevent abuse (also fixes Bug 16)
+  const ALLOWED_METHODS = new Set(['GET', 'POST']);
+  const method = (options.method || 'GET').toUpperCase();
+  if (!ALLOWED_METHODS.has(method)) {
+    return { ok: false, status: 0, error: 'Disallowed method' };
+  }
+
   return new Promise((resolve) => {
-    const req = net.request({
-      method: options.method || 'GET',
-      url: url,
-    });
+    const req = net.request({ method, url });
 
     if (options.headers) {
       for (const [k, v] of Object.entries(options.headers)) {
