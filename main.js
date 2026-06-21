@@ -307,17 +307,27 @@ function findMostRecentTranscript(brainDir) {
   } catch { return null; }
 }
 
+// Read the last `bufSize` bytes of the transcript and parse up to `n` JSONL lines.
+// We use a larger buffer (256 KB) to reliably capture 150 entries even in active
+// sessions where a single tool-call entry can be 500–2000 bytes.
+// IMPORTANT: when the read starts mid-file the very first byte-sequence is a
+// truncated partial line and must be discarded — otherwise JSON.parse fails on it
+// and silently drops one real entry every single poll cycle.
 function tailLines(filePath, n = 150) {
   try {
-    const buf = Buffer.alloc(32768);
+    const BUF_SIZE = 262144; // 256 KB
+    const buf = Buffer.alloc(BUF_SIZE);
     const fd = fs.openSync(filePath, 'r');
     const stat = fs.fstatSync(fd);
     const size = stat.size;
-    const start = Math.max(0, size - 32768);
-    const bytesRead = fs.readSync(fd, buf, 0, 32768, start);
+    const start = Math.max(0, size - BUF_SIZE);
+    const bytesRead = fs.readSync(fd, buf, 0, BUF_SIZE, start);
     fs.closeSync(fd);
     const chunk = buf.slice(0, bytesRead).toString('utf-8');
-    const lines = chunk.split('\n').filter(l => l.trim());
+    let lines = chunk.split('\n').filter(l => l.trim());
+    // If we didn't read from the very beginning of the file, the first line in
+    // the buffer is almost certainly a truncated fragment — drop it.
+    if (start > 0) lines = lines.slice(1);
     return lines.slice(-n).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
   } catch { return []; }
 }
@@ -389,12 +399,8 @@ function classifyStatus(brainDir) {
     status = { state: 'waiting', label: 'Pending / Blocked', description: status.description + ' (Timeout)' };
   }
 
-  // LOG STATE CHANGES TO DESKTOP SO USER CAN VERIFY APP'S INTERNAL EVALUATION
+  // Track last logged state for future debug use (in-memory only — no file I/O).
   if (status.state !== lastLoggedState || status.description !== lastLoggedDesc) {
-    try {
-      const logFile = path.join(__dirname, 'agent_status_log.txt');
-      fs.appendFileSync(logFile, `[${new Date().toISOString()}] State: ${status.state.padEnd(10)} | Desc: ${status.description}\n`);
-    } catch(e) {}
     lastLoggedState = status.state;
     lastLoggedDesc = status.description;
   }
