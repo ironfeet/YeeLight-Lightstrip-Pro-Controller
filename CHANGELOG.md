@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.9] - 21-06-2026
+
+### Fixed
+- **Smarter Transcript Reading:** The agent status reader now uses a 256 KB window (up from 32 KB) and correctly skips the inevitable truncated first line when reading large files. This means the app reliably reads up to 150 recent transcript entries instead of the ~17 it was silently capturing before.
+- **Settings Tab No Longer Freezes the Light:** Opening the ⚙ Settings panel now works as a true overlay — it doesn't stop any polling timers or change the active light mode. Closing it and switching back to any mode works instantly.
+- **Settings Mode Never Saved to Disk:** Previously, if you opened Settings and quit the app, it would restart in a permanently frozen state. The app now correctly ignores `settings` when saving your last active mode.
+- **Connection Security Hardened:** All outbound network requests are now validated against a strict allowlist. Only your configured Home Assistant server and GitHub's API are permitted — preventing any other origin from being reached through the app's network proxy.
+- **Memory Leak from Polling Fixed:** The Home Assistant client was being recreated on every single poll cycle (up to 3 times per second). It now uses a smart singleton that is only rebuilt when your connection settings actually change.
+- **Status Log File Removed:** The app was writing an unbounded `agent_status_log.txt` file into the project directory on every state change. State tracking is now done in-memory only.
+- **Poll Intervals Now Have a Single Source of Truth:** The agent and IDE poll interval settings were stored in three separate places that could drift out of sync. They now read directly from the config object everywhere.
+
 ## [0.0.8] - 20-06-2026
 
 ### Fixed
