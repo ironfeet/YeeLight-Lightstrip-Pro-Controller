@@ -1,6 +1,6 @@
 {
   "name": "yeelight-lightstrip-pro-controller",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "Control your Yeelight strip based on screen color and Antigravity status",
   "main": "main.js",
   "scripts": {

@@ -34,6 +34,21 @@ function rgbToHex(r, g, b) {
 
 function rgbToCss(r, g, b) { return `rgb(${r},${g},${b})`; }
 
+// Semantic version comparison: returns true if v1 is strictly newer than v2.
+// Defined at module level so it's available to both the update checker UI
+// and any future startup badge check without being recreated on every click.
+function isNewerVersion(v1, v2) {
+  const p1 = v1.split('.').map(Number);
+  const p2 = v2.split('.').map(Number);
+  for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
+    const n1 = p1[i] || 0;
+    const n2 = p2[i] || 0;
+    if (n1 > n2) return true;
+    if (n1 < n2) return false;
+  }
+  return false;
+}
+
 // ── Config ────────────────────────────────────────────────────────────────────
 let config = {
   haUrl: 'http://192.168.31.179:8123',
@@ -63,8 +78,18 @@ async function persistConfig() {
 }
 
 // ── HA Client wrapper ─────────────────────────────────────────────────────────
+// Singleton pattern: reuse the same HAClient instance across poll cycles instead
+// of allocating a new object on every call (up to 3×/second). The instance is
+// transparently rebuilt whenever the connection config actually changes.
+let _haClient = null;
 function getHA() {
-  return new HAClient(config.haUrl, config.haToken, config.entityId);
+  if (!_haClient ||
+      _haClient.haUrl    !== config.haUrl ||
+      _haClient.token    !== config.haToken ||
+      _haClient.entityId !== config.entityId) {
+    _haClient = new HAClient(config.haUrl, config.haToken, config.entityId);
+  }
+  return _haClient;
 }
 
 // ── Light state ───────────────────────────────────────────────────────────────
@@ -382,8 +407,8 @@ function stopMode1() {
 }
 
 // ── Mode 2: Antigravity AI Agent ──────────────────────────────────────────────
+// Poll interval is read directly from config (single source of truth — Bug 8 fix).
 let mode2Timer = null;
-let mode2Interval = 500; // matches the HTML slider default (value="500")
 
 async function pollAgentStatus() {
   try {
@@ -402,15 +427,15 @@ async function pollAgentStatus() {
 function startMode2() {
   stopMode2();
   pollAgentStatus();
-  mode2Timer = setInterval(pollAgentStatus, mode2Interval);
+  mode2Timer = setInterval(pollAgentStatus, config.mode2Interval || 500);
 }
 function stopMode2() {
   if (mode2Timer) { clearInterval(mode2Timer); mode2Timer = null; }
 }
 
 // ── Mode 3: Antigravity IDE Agent ─────────────────────────────────────────────
+// Poll interval is read directly from config (single source of truth — Bug 8 fix).
 let mode3Timer = null;
-let mode3Interval = 1000;
 
 async function pollIDEStatus() {
   try {
@@ -429,7 +454,7 @@ async function pollIDEStatus() {
 function startMode3() {
   stopMode3();
   pollIDEStatus();
-  mode3Timer = setInterval(pollIDEStatus, mode3Interval);
+  mode3Timer = setInterval(pollIDEStatus, config.mode3Interval || 1000);
 }
 function stopMode3() {
   if (mode3Timer) { clearInterval(mode3Timer); mode3Timer = null; }
@@ -437,6 +462,21 @@ function stopMode3() {
 
 // ── Mode Switching ────────────────────────────────────────────────────────────
 function activateMode(mode) {
+  // 'settings' is a pure UI overlay — it must NEVER stop the active light
+  // polling loop, change currentMode, or be persisted as the saved mode.
+  // We just swap the visible panel and tab highlight, then return early.
+  if (mode === 'settings') {
+    document.querySelectorAll('.tab').forEach(t => {
+      const active = t.dataset.mode === 'settings';
+      t.classList.toggle('active', active);
+      t.setAttribute('aria-selected', String(active));
+    });
+    document.querySelectorAll('.mode-panel').forEach(p => p.classList.remove('active'));
+    const settingsPanel = document.getElementById('panel-settings');
+    if (settingsPanel) settingsPanel.classList.add('active');
+    return;
+  }
+
   currentMode = mode;
   lastSentR = -1; lastSentG = -1; lastSentB = -1; // force resend on mode switch
   lastMeaningfulChangeTime = Date.now(); // reset auto-off timer
@@ -530,16 +570,22 @@ function bindEvents() {
   document.querySelectorAll('.tab').forEach(t => {
     t.addEventListener('click', () => {
       activateMode(t.dataset.mode);
-      config.appMode = t.dataset.mode;
-      persistConfig();
+      // 'settings' is a UI-only overlay — never save it as the active mode
+      // so the light mode is correctly restored on the next app launch.
+      if (t.dataset.mode !== 'settings') {
+        config.appMode = t.dataset.mode;
+        persistConfig();
+      }
     });
   });
 
-  // Tray Menu Sync
+  // Tray Menu Sync (tray has no settings entry, but guard anyway for safety)
   window.electronAPI.onSetMode((event, mode) => {
     activateMode(mode);
-    config.appMode = mode;
-    persistConfig();
+    if (mode !== 'settings') {
+      config.appMode = mode;
+      persistConfig();
+    }
   });
 
   // Power toggle
@@ -572,19 +618,17 @@ function bindEvents() {
     document.getElementById('screen-capture-wrap').classList.toggle('visible', this.checked);
   });
 
-  // Mode 2 interval
+  // Mode 2 interval — write directly to config (single source of truth, Bug 8 fix)
   document.getElementById('agent-interval').addEventListener('input', function () {
-    mode2Interval = parseInt(this.value);
-    config.mode2Interval = mode2Interval;
-    document.getElementById('agent-interval-val').textContent = (mode2Interval / 1000).toFixed(1) + 's';
+    config.mode2Interval = parseInt(this.value);
+    document.getElementById('agent-interval-val').textContent = (config.mode2Interval / 1000).toFixed(1) + 's';
     if (currentMode === 'agent') startMode2();
   });
 
-  // Mode 3 interval
+  // Mode 3 interval — write directly to config (single source of truth, Bug 8 fix)
   document.getElementById('ide-interval').addEventListener('input', function () {
-    mode3Interval = parseInt(this.value);
-    config.mode3Interval = mode3Interval;
-    document.getElementById('ide-interval-val').textContent = (mode3Interval / 1000).toFixed(1) + 's';
+    config.mode3Interval = parseInt(this.value);
+    document.getElementById('ide-interval-val').textContent = (config.mode3Interval / 1000).toFixed(1) + 's';
     if (currentMode === 'ide') startMode3();
   });
 
@@ -644,18 +688,7 @@ function bindEvents() {
         const currentVersion = await window.electronAPI.getAppVersion();
         const latestVersion = res.data.tag_name.replace(/^v/, '');
         
-        const isNewerVersion = (v1, v2) => {
-          const p1 = v1.split('.').map(Number);
-          const p2 = v2.split('.').map(Number);
-          for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
-            const n1 = p1[i] || 0;
-            const n2 = p2[i] || 0;
-            if (n1 > n2) return true;
-            if (n1 < n2) return false;
-          }
-          return false;
-        };
-
+        // isNewerVersion is defined at module level (Bug 5 fix)
         if (isNewerVersion(latestVersion, currentVersion)) {
           statusEl.textContent = `New update available! (v${latestVersion})`;
           statusEl.style.color = 'var(--status-ok)';
@@ -695,13 +728,13 @@ async function init() {
   document.getElementById('brightness-pct').value = config.brightness || 80;
   document.getElementById('brightness-val').textContent = `${config.brightness || 80}%`;
 
-  // Restore agent and IDE poll intervals from config
-  mode2Interval = config.mode2Interval || 500;
-  document.getElementById('agent-interval').value = mode2Interval;
-  document.getElementById('agent-interval-val').textContent = (mode2Interval / 1000).toFixed(1) + 's';
-  mode3Interval = config.mode3Interval || 1000;
-  document.getElementById('ide-interval').value = mode3Interval;
-  document.getElementById('ide-interval-val').textContent = (mode3Interval / 1000).toFixed(1) + 's';
+  // Restore agent and IDE poll intervals from config (single source of truth, Bug 8 fix)
+  config.mode2Interval = config.mode2Interval || 500;
+  document.getElementById('agent-interval').value = config.mode2Interval;
+  document.getElementById('agent-interval-val').textContent = (config.mode2Interval / 1000).toFixed(1) + 's';
+  config.mode3Interval = config.mode3Interval || 1000;
+  document.getElementById('ide-interval').value = config.mode3Interval;
+  document.getElementById('ide-interval-val').textContent = (config.mode3Interval / 1000).toFixed(1) + 's';
 
   // activateMode handles starting the correct timer — no need to pre-start all modes.
   activateMode(config.appMode || 'agent');
