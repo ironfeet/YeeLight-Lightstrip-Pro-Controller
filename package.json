@@ -15,6 +15,9 @@
     "type": "git",
     "url": "https://github.com/ironfeet/YeeLight-Lightstrip-Pro-Controller.git"
   },
+  "overrides": {
+    "undici": ">=6.27.0"
+  },
   "devDependencies": {
     "electron": "^41.7.1",
     "electron-builder": "^26.15.2"
